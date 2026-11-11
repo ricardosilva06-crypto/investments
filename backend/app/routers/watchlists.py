@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, selectinload
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import Security, User, Watchlist, WatchlistItem
-from ..schemas import ORM, SecurityOut
+from ..schemas import ORM, QuoteOut, SecurityOut
+from ..services.prices import latest_quotes
 
 router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 
@@ -21,6 +22,7 @@ class ItemOut(ORM):
     note: str
     added_at: datetime
     security: SecurityOut
+    quote: QuoteOut | None = None
 
 
 class WatchlistOut(ORM):
@@ -52,12 +54,19 @@ def owned_watchlist(db: Session, user: User, watchlist_id: int) -> Watchlist:
 
 @router.get("", response_model=list[WatchlistOut])
 def list_watchlists(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.scalars(
+    wls = db.scalars(
         select(Watchlist)
         .where(Watchlist.user_id == user.id)
         .options(selectinload(Watchlist.items).selectinload(WatchlistItem.security))
         .order_by(Watchlist.created_at)
     ).all()
+    out = [WatchlistOut.model_validate(w) for w in wls]
+    quotes = latest_quotes(db, sorted({i.security.ticker for w in out for i in w.items}))
+    for w in out:
+        for i in w.items:
+            q = quotes.get(i.security.ticker)
+            i.quote = QuoteOut(**q) if q else None
+    return out
 
 
 @router.post("", response_model=WatchlistOut, status_code=201)

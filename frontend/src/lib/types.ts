@@ -21,7 +21,18 @@ export type SourceStatus = {
   last_success_at: string | null;
 };
 
-export type WatchItem = { id: number; note: string; added_at: string; security: Security };
+export type Quote = {
+  close: string;
+  date: string;
+  prev_close: string | null;
+  prev_date: string | null;
+  change: string | null;
+  change_pct: string | null;
+  source: string;
+  currency: string;
+};
+
+export type WatchItem = { id: number; note: string; added_at: string; security: Security; quote: Quote | null };
 export type Watchlist = { id: number; name: string; created_at: string; items: WatchItem[] };
 
 export type Note = {
@@ -49,7 +60,7 @@ export type Dashboard = {
   display_name: string;
   watchlist_count: number;
   watched_securities: number;
-  watch_items: { watchlist_id: number; watchlist_name: string; security: Security; note: string }[];
+  watch_items: { watchlist_id: number; watchlist_name: string; security: Security; note: string; quote: Quote | null }[];
   recent_notes: { id: number; title: string; updated_at: string }[];
   note_count: number;
   portfolios: { id: number; name: string; open_positions: number; cost_basis_by_currency: Record<string, string>; error: string | null }[];
@@ -93,12 +104,119 @@ export type Position = {
   first_trade: string | null;
   security_ticker: string | null;
   security_name: string | null;
+  last_close: string | null;
+  last_close_date: string | null;
+  price_source: string | null;
+  market_value: string | null;
+  unrealized_pl: string | null;
+  valuation_note: string | null;
 };
 export type PortfolioDetail = {
   portfolio: PortfolioSummary;
   open_positions: Position[];
   closed_positions: Position[];
-  totals_by_currency: { currency: string; cost_basis: string; realized_pl: string; dividends: string }[];
+  totals_by_currency: {
+    currency: string;
+    cost_basis: string;
+    realized_pl: string;
+    dividends: string;
+    market_value: string | null;
+    unrealized_pl: string | null;
+    priced_positions: number;
+    open_positions: number;
+    oldest_price_date: string | null;
+  }[];
   transactions: Transaction[];
   market_value_note: string;
+};
+
+export type FinCell = {
+  value: string;
+  concept: string;
+  unit: string;
+  accession: string;
+  form: string;
+  filed: string | null;
+  derived: boolean;
+  formula: string;
+  url?: string;
+};
+
+export type FinRow = { key: string; label: string; kind: string; indent: number; values: (FinCell | null)[] };
+
+export type Statement = {
+  statement: "income" | "balance" | "cashflow" | "metrics";
+  period: "annual" | "quarterly";
+  currency: string;
+  periods: { start: string | null; end: string; label: string }[];
+  rows: FinRow[];
+  source: { name: string; url: string | null; last_success_at: string | null };
+};
+
+export type KeyFigure = {
+  key: string;
+  label: string;
+  kind: string;
+  value: string;
+  period_end: string;
+  derived: boolean;
+  formula: string;
+  concept: string;
+  form: string;
+  filed: string | null;
+};
+
+export type CompanyProfile = {
+  cik: number;
+  name: string;
+  entity_type: string;
+  sic: string;
+  sic_description: string;
+  category: string;
+  fiscal_year_end: string;
+  state_of_incorporation: string;
+  business_address: string;
+  phone: string;
+  website: string;
+  investor_website: string;
+  tickers: string[];
+  exchanges: string[];
+  former_names: { name: string; from?: string; to?: string }[];
+};
+
+export type Company = {
+  security: Security;
+  profile: CompanyProfile | null;
+  freshness: { source: string; status: string; message: string; last_success_at: string | null }[];
+  errors: Record<string, string>;
+  quote: Quote | null;
+  key_figures: KeyFigure[];
+  currency: string;
+  has_financials: boolean;
+};
+
+export type FilingRow = { accession: string; form: string; filing_date: string; report_date: string | null; description: string; url: string };
+
+export type PriceBar = { date: string; open: string | null; high: string | null; low: string | null; close: string; adj_close: string | null; volume: number | null };
+export type Prices = {
+  ticker: string;
+  bars: PriceBar[];
+  sources: string[];
+  currency: string | null;
+  last_date: string | null;
+  provider_configured: boolean;
+  error: string | null;
+  note: string;
+};
+
+export type FxRate = { currency: string; date: string; value: string; prev_value: string | null; change_pct: string | null };
+export type Fx = {
+  base: string;
+  rates: FxRate[];
+  source: string;
+  source_url: string;
+  status: string;
+  message: string;
+  last_success_at: string | null;
+  note: string;
 };

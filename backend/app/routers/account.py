@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, selectinload
 from ..db import get_db, utcnow
 from ..deps import get_current_user
 from ..models import DataSync, Note, Notification, Portfolio, Security, User, UserPreference, Watchlist, WatchlistItem
-from ..schemas import ORM, SecurityOut
+from ..schemas import ORM, QuoteOut, SecurityOut
+from ..services.prices import latest_quotes
 from ..services import ai
 from ..services.portfolio import LedgerError, build_ledger
 
@@ -123,6 +124,7 @@ class DashWatchItem(BaseModel):
     watchlist_name: str
     security: SecurityOut
     note: str
+    quote: QuoteOut | None = None
 
 
 class DashNote(ORM):
@@ -166,6 +168,10 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         for i in w.items
     ]
     items.sort(key=lambda x: x.security.ticker)
+    quotes = latest_quotes(db, sorted({i.security.ticker for i in items}))
+    for i in items:
+        q = quotes.get(i.security.ticker)
+        i.quote = QuoteOut(**q) if q else None
     portfolios = []
     for p in db.scalars(
         select(Portfolio).where(Portfolio.user_id == user.id).options(selectinload(Portfolio.transactions))

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorNote, PageHeader, SourceLine } from "@/components/page";
 import { SecurityRow } from "@/components/security-row";
 import { AddToWatchlistSheet } from "@/components/add-to-watchlist";
+import { FxCard } from "@/components/fx-card";
 import { fmtDate, fmtInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Security } from "@/lib/types";
@@ -41,7 +42,11 @@ export default function MarketsPage() {
 
   return (
     <div>
-      <PageHeader title="Markets" subtitle="US-listed securities registered with the SEC" />
+      <PageHeader title="Markets" subtitle="Reference rates and SEC-registered securities" />
+
+      <div className="mb-4">
+        <FxCard />
+      </div>
 
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />

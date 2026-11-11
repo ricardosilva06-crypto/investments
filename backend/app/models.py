@@ -7,7 +7,7 @@ and every query in the routers filters on the authenticated user's id.
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base, DecimalString, UTCDateTime, utcnow
@@ -185,3 +185,123 @@ class UserPreference(Base):
     theme: Mapped[str] = mapped_column(String(8), default="dark")  # dark | light | system
     base_currency: Mapped[str] = mapped_column(String(3), default="EUR")
     compact_numbers: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+# ----------------------------------------------------------------- Phase 2
+class FetchState(Base):
+    """Freshness of per-entity downloads, e.g. ("sec_companyfacts", "320193")."""
+
+    __tablename__ = "fetch_states"
+    __table_args__ = (UniqueConstraint("source", "key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(48))
+    key: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default="never")  # ok | error | not_found
+    message: Mapped[str] = mapped_column(Text, default="")
+    last_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_success_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class CompanyProfile(Base):
+    """From SEC EDGAR submissions JSON (data.sec.gov/submissions/CIK##########.json)."""
+
+    __tablename__ = "company_profiles"
+
+    cik: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    entity_type: Mapped[str] = mapped_column(String(64), default="")
+    sic: Mapped[str] = mapped_column(String(8), default="")
+    sic_description: Mapped[str] = mapped_column(String(255), default="")
+    category: Mapped[str] = mapped_column(String(128), default="")
+    fiscal_year_end: Mapped[str] = mapped_column(String(4), default="")  # MMDD
+    state_of_incorporation: Mapped[str] = mapped_column(String(64), default="")
+    business_address: Mapped[str] = mapped_column(Text, default="")
+    phone: Mapped[str] = mapped_column(String(64), default="")
+    website: Mapped[str] = mapped_column(String(255), default="")
+    investor_website: Mapped[str] = mapped_column(String(255), default="")
+    tickers: Mapped[str] = mapped_column(String(255), default="")  # comma separated
+    exchanges: Mapped[str] = mapped_column(String(255), default="")
+    former_names: Mapped[str] = mapped_column(Text, default="")  # JSON list
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Filing(Base):
+    __tablename__ = "filings"
+    __table_args__ = (UniqueConstraint("cik", "accession"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cik: Mapped[int] = mapped_column(Integer, index=True)
+    accession: Mapped[str] = mapped_column(String(25))
+    form: Mapped[str] = mapped_column(String(20), index=True)
+    filing_date: Mapped[date] = mapped_column(Date, index=True)
+    report_date: Mapped[date | None] = mapped_column(Date)
+    primary_document: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(String(255), default="")
+
+
+class FinancialFact(Base):
+    """One reported XBRL value, exactly as filed (data.sec.gov companyfacts)."""
+
+    __tablename__ = "financial_facts"
+    __table_args__ = (Index("ix_facts_cik_concept", "cik", "concept"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cik: Mapped[int] = mapped_column(Integer, index=True)
+    taxonomy: Mapped[str] = mapped_column(String(16))
+    concept: Mapped[str] = mapped_column(String(160))
+    unit: Mapped[str] = mapped_column(String(32))
+    start: Mapped[date | None] = mapped_column(Date)
+    end: Mapped[date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(DecimalString)
+    accession: Mapped[str] = mapped_column(String(25))
+    fy: Mapped[int | None] = mapped_column(Integer)
+    fp: Mapped[str] = mapped_column(String(4), default="")
+    form: Mapped[str] = mapped_column(String(20))
+    filed: Mapped[date] = mapped_column(Date)
+    frame: Mapped[str] = mapped_column(String(16), default="")
+
+
+class PriceBar(Base):
+    """End-of-day price bar. Never intraday / real-time."""
+
+    __tablename__ = "price_bars"
+    __table_args__ = (UniqueConstraint("ticker", "day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(20), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    open: Mapped[Decimal | None] = mapped_column(DecimalString)
+    high: Mapped[Decimal | None] = mapped_column(DecimalString)
+    low: Mapped[Decimal | None] = mapped_column(DecimalString)
+    close: Mapped[Decimal] = mapped_column(DecimalString)
+    adj_close: Mapped[Decimal | None] = mapped_column(DecimalString)
+    volume: Mapped[int | None] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
+    source: Mapped[str] = mapped_column(String(48))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ProviderUsage(Base):
+    """Counts our own requests to rate-limited providers (one row per provider per hour)."""
+
+    __tablename__ = "provider_usage"
+    __table_args__ = (UniqueConstraint("provider", "hour"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    hour: Mapped[datetime] = mapped_column(UTCDateTime)
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class FxRate(Base):
+    """ECB euro foreign exchange reference rates (1 EUR = value CURRENCY)."""
+
+    __tablename__ = "fx_rates"
+    __table_args__ = (UniqueConstraint("currency", "day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    currency: Mapped[str] = mapped_column(String(3), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(DecimalString)
+    source: Mapped[str] = mapped_column(String(32), default="ecb_exr")

@@ -9,6 +9,7 @@ import { Field, Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ErrorNote, PageHeader } from "@/components/page";
 import { useAuth } from "@/components/providers";
+import { PriceImportCard } from "@/components/price-import";
 import { api } from "@/lib/api";
 import { fmtDate, fmtInt, fmtRelative } from "@/lib/format";
 import type { SystemStatus, User } from "@/lib/types";
@@ -87,6 +88,8 @@ export default function AdminPage() {
           <p className="text-[11.5px] text-muted-foreground">One request per sync, at most once per hour. Requires II_SEC_USER_AGENT on the server (SEC fair-access policy).</p>
         </CardContent>
       </Card>
+
+      <PriceImportCard />
 
       <Card>
         <CardHeader>

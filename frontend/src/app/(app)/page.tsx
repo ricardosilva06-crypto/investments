@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorNote, SourceLine } from "@/components/page";
-import { SecurityRow } from "@/components/security-row";
+import { QuoteCell, SecurityRow } from "@/components/security-row";
 import { useAuth } from "@/components/providers";
 import { useShell } from "@/components/shell/app-shell";
 import { fmtInt, fmtMoney, fmtRelative } from "@/lib/format";
@@ -106,7 +106,7 @@ export default function HomePage() {
           <ul className="divide-y divide-border/60 pb-1">
             {data.watch_items.slice(0, 6).map((i) => (
               <li key={`${i.watchlist_id}-${i.security.id}`}>
-                <SecurityRow security={i.security} sub={i.note || i.security.name} />
+                <SecurityRow security={i.security} sub={i.note || i.security.name} quote={<QuoteCell quote={i.quote} />} />
               </li>
             ))}
           </ul>
@@ -117,7 +117,7 @@ export default function HomePage() {
           </CardContent>
         )}
         <CardContent className="pt-0">
-          <SourceLine>Prices are not shown yet: a free, permitted price source is added in Phase 2.</SourceLine>
+          <SourceLine>End-of-day closes with their date. Never real-time.</SourceLine>
         </CardContent>
       </Card>
 
@@ -155,7 +155,7 @@ export default function HomePage() {
           ) : (
             <p className="text-[13px] text-muted-foreground">{data ? "No portfolio yet. Record your transactions to track cost basis." : ""}</p>
           )}
-          <SourceLine>Amounts are cost basis calculated from your own transactions, not market value.</SourceLine>
+          <SourceLine>Amounts are cost basis calculated from your own transactions. Open a portfolio for market value.</SourceLine>
         </CardContent>
       </Card>
 

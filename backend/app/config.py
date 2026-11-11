@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # Local Ollama server (Phase 3). Only used for an availability check now.
     ollama_url: str = "http://127.0.0.1:11434"
 
+    # Optional end-of-day price provider (Tiingo free plan; personal/internal use).
+    # Leave empty to rely on CSV imports only. Budget stays below Tiingo's free limits.
+    tiingo_api_key: str = ""
+    tiingo_max_per_hour: int = 40
+    tiingo_max_per_day: int = 400
+
     # Minimum seconds between two syncs of the same data source.
     min_sync_interval_seconds: int = 3600
 

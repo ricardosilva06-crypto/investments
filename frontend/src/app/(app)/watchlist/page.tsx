@@ -10,7 +10,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorNote, PageHeader, SourceLine } from "@/components/page";
-import { SecurityRow } from "@/components/security-row";
+import { QuoteCell, SecurityRow } from "@/components/security-row";
 import { useShell } from "@/components/shell/app-shell";
 import { api } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
@@ -112,6 +112,7 @@ export default function WatchlistPage() {
                     <SecurityRow
                       security={i.security}
                       sub={i.note || i.security.name}
+                      quote={<QuoteCell quote={i.quote} />}
                       right={
                         <Button
                           variant="ghost"
@@ -132,7 +133,7 @@ export default function WatchlistPage() {
             )}
           </div>
           <div className="mt-3 flex justify-between">
-            <SourceLine>Prices and daily changes arrive with the Phase 2 market data integration.</SourceLine>
+            <SourceLine>Last stored end-of-day close and change vs the previous stored close. Not real-time.</SourceLine>
             <Button
               variant="ghost"
               size="sm"

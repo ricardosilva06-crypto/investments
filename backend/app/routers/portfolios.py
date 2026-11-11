@@ -13,6 +13,7 @@ from ..deps import get_current_user
 from ..models import Portfolio, Security, Transaction, User
 from ..schemas import ORM
 from ..services.portfolio import LedgerError, build_ledger
+from ..services.prices import latest_quotes
 
 router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
 
@@ -94,6 +95,13 @@ class PositionOut(BaseModel):
     first_trade: str | None
     security_ticker: str | None
     security_name: str | None
+    # Valuation at the latest stored end-of-day close (only when the price currency matches).
+    last_close: Decimal | None = None
+    last_close_date: date | None = None
+    price_source: str | None = None
+    market_value: Decimal | None = None
+    unrealized_pl: Decimal | None = None
+    valuation_note: str | None = None
 
 
 class CurrencyTotal(BaseModel):
@@ -101,6 +109,11 @@ class CurrencyTotal(BaseModel):
     cost_basis: Decimal
     realized_pl: Decimal
     dividends: Decimal
+    market_value: Decimal | None = None  # only when every open position in this currency has a price
+    unrealized_pl: Decimal | None = None
+    priced_positions: int = 0
+    open_positions: int = 0
+    oldest_price_date: date | None = None
 
 
 class PortfolioOut(ORM):
@@ -130,6 +143,7 @@ def detail(db: Session, p: Portfolio) -> PortfolioDetail:
     ledger = build_ledger(txs)
     sec_ids = {pos.security_id for pos in ledger.positions.values() if pos.security_id}
     secs = {s.id: s for s in db.scalars(select(Security).where(Security.id.in_(sec_ids)))} if sec_ids else {}
+    quotes = latest_quotes(db, sorted({pos.symbol for pos in ledger.positions.values() if pos.quantity > 0}))
     open_, closed = [], []
     totals: dict[str, CurrencyTotal] = {}
     for pos in sorted(ledger.positions.values(), key=lambda x: x.symbol):
@@ -148,11 +162,30 @@ def detail(db: Session, p: Portfolio) -> PortfolioDetail:
             security_ticker=sec.ticker if sec else None,
             security_name=sec.name if sec else None,
         )
+        t = totals.setdefault(pos.currency, CurrencyTotal(currency=pos.currency, cost_basis=0, realized_pl=0, dividends=0, market_value=0, unrealized_pl=0))
+        if pos.quantity > 0:
+            t.open_positions += 1
+            q = quotes.get(pos.symbol)
+            if q is None:
+                out.valuation_note = "No stored price"
+            elif q["currency"] != pos.currency:
+                out.valuation_note = f"Price is in {q['currency']}, position in {pos.currency}; not converted"
+            else:
+                out.last_close, out.last_close_date, out.price_source = q["close"], q["date"], q["source"]
+                out.market_value = (pos.quantity * q["close"]).quantize(Decimal("0.01"))
+                out.unrealized_pl = out.market_value - pos.cost_basis
+                t.priced_positions += 1
+                t.market_value += out.market_value
+                t.unrealized_pl += out.unrealized_pl
+                if t.oldest_price_date is None or q["date"] < t.oldest_price_date:
+                    t.oldest_price_date = q["date"]
         (open_ if pos.quantity > 0 else closed).append(out)
-        t = totals.setdefault(pos.currency, CurrencyTotal(currency=pos.currency, cost_basis=0, realized_pl=0, dividends=0))
         t.cost_basis += pos.cost_basis
         t.realized_pl += pos.realized_pl
         t.dividends += pos.dividends
+    for t in totals.values():
+        if t.priced_positions < t.open_positions or t.open_positions == 0:
+            t.market_value = t.unrealized_pl = None
     return PortfolioDetail(
         portfolio=p,
         open_positions=open_,
@@ -160,8 +193,8 @@ def detail(db: Session, p: Portfolio) -> PortfolioDetail:
         totals_by_currency=sorted(totals.values(), key=lambda t: t.currency),
         transactions=sorted(txs, key=lambda t: (t.trade_date, t.id), reverse=True),
         market_value_note=(
-            "Market value and unrealised gains need a price source. Price data arrives in Phase 2; "
-            "until then only figures derived from your own transactions are shown."
+            "Market value uses the latest stored end-of-day close (date shown), not live prices. "
+            "Totals are shown only when every open position in that currency has a price; no FX conversion."
         ),
     )
 

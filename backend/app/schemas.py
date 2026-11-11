@@ -1,6 +1,7 @@
 """Shared response models."""
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -26,3 +27,16 @@ class SecurityOut(ORM):
     source: str
     is_listed: bool
     updated_at: datetime
+
+
+class QuoteOut(BaseModel):
+    """Latest stored end-of-day close. Never real-time."""
+
+    close: Decimal
+    date: date
+    prev_close: Decimal | None
+    prev_date: date | None
+    change: Decimal | None
+    change_pct: Decimal | None
+    source: str
+    currency: str

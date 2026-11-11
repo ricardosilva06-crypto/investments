@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .config import get_settings
 from .db import init_db
-from .routers import account, admin, auth, notes, portfolios, securities, watchlists
+from .routers import account, admin, auth, companies, notes, portfolios, securities, watchlists
 
 CSRF_HEADER = "x-requested-with"
 CSRF_VALUE = "InvestorIntelligence"
@@ -45,7 +45,7 @@ async def security_middleware(request: Request, call_next):
     return response
 
 
-for r in (auth, securities, watchlists, notes, portfolios, account, admin):
+for r in (auth, securities, companies, watchlists, notes, portfolios, account, admin):
     app.include_router(r.router)
 
 

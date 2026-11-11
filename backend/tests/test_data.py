@@ -120,7 +120,8 @@ def test_portfolio_ledger(admin_client, seeded):
     assert Decimal(aapl["dividends"]) == Decimal("3.75")
     assert aapl["security_name"] == "Apple Inc."
     assert {t["currency"] for t in d["totals_by_currency"]} == {"EUR", "USD"}
-    assert "Phase 2" in d["market_value_note"]
+    assert "end-of-day" in d["market_value_note"]
+    assert aapl["market_value"] is None and aapl["valuation_note"] == "No stored price"
 
     # Deleting one buy keeps the sell valid; deleting both would not -> refused.
     buys = [t for t in d["transactions"] if t["kind"] == "buy" and t["symbol"] == "AAPL"]

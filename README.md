@@ -6,7 +6,9 @@ and costs **€0** in mandatory subscriptions, hosting, APIs or AI fees.
 - **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS 4, shadcn/ui-style components (Radix UI), exported as static files.
 - **Backend:** Python FastAPI + SQLite (one file, easy to back up).
 - **AI (Phase 3):** Ollama with open-source models, running locally.
-- **Data:** official, free sources first (SEC EDGAR now; ECB, FRED, SEC XBRL next).
+- **Data:** official, free sources first: SEC EDGAR (company list, XBRL financial statements, filings),
+  ECB euro reference rates, and end-of-day prices via CSV import or the optional Tiingo free plan.
+- **Charts:** TradingView Lightweight Charts (prices) and Recharts (financials, FX).
 
 > Status and the full cost audit live in [PROJECT_STATUS.md](PROJECT_STATUS.md) (see **ZERO-COST ARCHITECTURE**).
 
@@ -28,6 +30,13 @@ cd backend
 .venv/bin/python -m app.cli create-admin          # asks for username + password
 .venv/bin/python -m app.cli sync-sec              # one request to SEC EDGAR (~10k US companies)
 ```
+
+Financial statements are downloaded from SEC EDGAR the first time someone opens a company,
+then refreshed at most daily.
+
+**Prices (optional):** the app never invents prices. Either import a daily CSV in
+**Administration → End-of-day prices** (columns `Date,Close`, optionally `Open,High,Low,Volume`), or
+create a free Tiingo account and set `II_TIINGO_API_KEY` in `backend/.env` (see PROJECT_STATUS.md for its terms).
 
 Open `http://localhost:8000` on the computer, or `http://<computer-LAN-IP>:8000` on a phone
 on the same Wi-Fi. (To install the app on a phone and use it offline, you need HTTPS. See section 3.)
@@ -111,8 +120,8 @@ A private network (Tailscale or WireGuard) avoids all of this, which is why it's
 backend/
   app/main.py            FastAPI app, CSRF + security headers, serves the static PWA
   app/models.py          SQLite schema (SQLAlchemy 2)
-  app/routers/           auth, securities/search, watchlists, notes, portfolios, account, admin
-  app/services/          sec (EDGAR sync), portfolio ledger, backup, ai (Ollama status)
+  app/routers/           auth, securities/search, companies (profile/financials/filings/prices/fx), watchlists, notes, portfolios, account, admin
+  app/services/          sec + sec_client (EDGAR), fundamentals (XBRL statements), prices (CSV/Tiingo), ecb (FX), portfolio ledger, backup, ai
   app/cli.py             create-admin, create-invite, sync-sec, backup
   tests/                 pytest suite (auth, isolation, ledger, sync, backups)
 frontend/

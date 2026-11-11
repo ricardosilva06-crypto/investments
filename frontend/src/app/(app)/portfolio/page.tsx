@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorNote, PageHeader, SourceLine } from "@/components/page";
 import { TickerAvatar } from "@/components/security-row";
 import { api } from "@/lib/api";
-import { fmtDate, fmtMoney, fmtQty, signClass } from "@/lib/format";
+import { fmtDate, fmtMoney, fmtPrice, fmtQty, fmtShortDate, signClass } from "@/lib/format";
 import type { PortfolioDetail, PortfolioSummary, Position, Preferences, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -41,15 +41,36 @@ function PositionCard({ p }: { p: Position }) {
           ) : (
             <span className="font-semibold">{p.symbol}</span>
           )}
-          <p className="truncate text-[12px] text-muted-foreground">{p.security_name ?? `${p.transactions} transactions`}</p>
+          <p className="truncate text-[12px] text-muted-foreground">
+            {p.security_name ?? `${p.transactions} transactions`}
+            {p.quantity !== "0" && p.valuation_note ? ` · ${p.valuation_note}` : ""}
+          </p>
         </div>
         <div className="num text-right">
-          <p className="font-semibold">{fmtMoney(p.cost_basis, p.currency)}</p>
-          <p className="text-[12px] text-muted-foreground">cost basis</p>
+          {p.market_value ? (
+            <>
+              <p className="font-semibold">{fmtMoney(p.market_value, p.currency)}</p>
+              <p className={cn("text-[12px] font-medium", signClass(p.unrealized_pl))}>
+                {Number(p.unrealized_pl) > 0 ? "+" : ""}
+                {fmtMoney(p.unrealized_pl, p.currency)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold">{fmtMoney(p.cost_basis, p.currency)}</p>
+              <p className="text-[12px] text-muted-foreground">cost basis</p>
+            </>
+          )}
         </div>
       </div>
       <div className="no-scrollbar -mx-3.5 mt-2 flex gap-4 overflow-x-auto px-3.5 text-[12px]">
         {[
+          ...(p.market_value
+            ? [
+                [`Close ${fmtShortDate(p.last_close_date)}`, fmtPrice(p.last_close, p.currency), ""],
+                ["Cost basis", fmtMoney(p.cost_basis, p.currency), ""],
+              ]
+            : []),
           ["Quantity", fmtQty(p.quantity), ""],
           ["Avg cost", p.average_cost ? fmtMoney(p.average_cost, p.currency) : "—", ""],
           ["Realised P/L", fmtMoney(p.realized_pl, p.currency), signClass(p.realized_pl)],
@@ -237,10 +258,27 @@ export default function PortfolioPage() {
               data.totals_by_currency.map((t) => (
                 <div key={t.currency} className={cn("snap-start rounded-2xl bg-gradient-to-br from-primary/20 via-card to-card p-4 ring-1 ring-border/60", data.totals_by_currency.length > 1 ? "min-w-[82%]" : "w-full")}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Open cost basis</p>
+                    <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t.market_value ? "Market value" : "Open cost basis"}
+                    </p>
                     <Badge variant="muted">{t.currency}</Badge>
                   </div>
-                  <p className="num mt-1 text-[28px] font-bold tracking-tight">{fmtMoney(t.cost_basis, t.currency)}</p>
+                  <p className="num mt-1 text-[28px] font-bold tracking-tight">{fmtMoney(t.market_value ?? t.cost_basis, t.currency)}</p>
+                  {t.market_value ? (
+                    <p className="text-[12px] text-muted-foreground">
+                      At closes up to {fmtDate(t.oldest_price_date)} · cost {fmtMoney(t.cost_basis, t.currency)} ·{" "}
+                      <span className={cn("font-semibold", signClass(t.unrealized_pl))}>
+                        unrealised {Number(t.unrealized_pl) > 0 ? "+" : ""}
+                        {fmtMoney(t.unrealized_pl, t.currency)}
+                      </span>
+                    </p>
+                  ) : (
+                    t.open_positions > 0 && (
+                      <p className="text-[12px] text-muted-foreground">
+                        Prices stored for {t.priced_positions} of {t.open_positions} open positions; total market value needs all of them.
+                      </p>
+                    )
+                  )}
                   <div className="mt-2 grid grid-cols-2 gap-2 text-[13px]">
                     <div>
                       <p className="text-muted-foreground">Realised P/L</p>
@@ -257,7 +295,7 @@ export default function PortfolioPage() {
           </div>
           <div className="mt-2 flex gap-2 rounded-xl bg-elevated px-3 py-2 text-[12px] text-muted-foreground">
             <Info className="mt-0.5 size-3.5 shrink-0" />
-            <span>{data.market_value_note} Totals are per currency; no FX conversion is applied.</span>
+            <span>{data.market_value_note}</span>
           </div>
 
           <Segmented
@@ -320,7 +358,7 @@ export default function PortfolioPage() {
               <p className="p-4 text-center text-[13px] text-muted-foreground">No transactions recorded.</p>
             )}
           </div>
-          <SourceLine>All figures are calculated from transactions you entered (average-cost method).</SourceLine>
+          <SourceLine>Cost basis and realised P/L are calculated from your transactions (average-cost method). Market values use stored end-of-day closes.</SourceLine>
           <Button variant="ghost" size="sm" className="mt-4 text-negative" onClick={deletePortfolio}>
             <Trash2 /> Delete portfolio
           </Button>
