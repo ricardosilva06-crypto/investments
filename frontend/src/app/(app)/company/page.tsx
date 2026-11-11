@@ -87,8 +87,22 @@ function Overview({ c, onProv }: { c: Company; onProv: (p: Provenance) => void }
         <p className="rounded-2xl border border-dashed border-border p-4 text-[13px] text-muted-foreground">
           {c.security.cik
             ? "No XBRL financial data is available for this company yet (or it has not been downloaded)."
-            : "This security has no SEC CIK, so SEC financial data is not available."}
+            : c.esef
+              ? "No standard IFRS figures were found in this company’s imported ESEF reports."
+              : "This security has no SEC CIK or imported ESEF report, so no financial statements are available."}
         </p>
+      )}
+
+      {c.esef && (
+        <div className="rounded-2xl border border-border/60 bg-card p-3.5 text-[13px]">
+          <p className="font-semibold">Fundamentals from ESEF annual reports</p>
+          <p className="mt-0.5 text-muted-foreground">
+            {c.esef.entity_name} · {c.esef.reports} report{c.esef.reports === 1 ? "" : "s"}
+            {c.esef.latest_period_end ? `, latest fiscal year ended ${fmtDate(c.esef.latest_period_end)}` : ""}
+          </p>
+          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">LEI {c.esef.lei}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">IFRS figures as tagged in the report; annual only (no quarters).</p>
+        </div>
       )}
 
       {p && (
@@ -309,7 +323,9 @@ export default function CompanyPage() {
 
       <div className="mt-5 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
         <p className="text-[11.5px] text-muted-foreground">
-          SEC data {facts?.last_success_at ? `downloaded ${fmtRelative(facts.last_success_at)}` : "not downloaded"}
+          {data.esef
+            ? `ESEF reports: ${data.esef.reports}`
+            : `SEC data ${facts?.last_success_at ? `downloaded ${fmtRelative(facts.last_success_at)}` : "not downloaded"}`}
           {detail?.edgar_url && (
             <>
               {" · "}

@@ -66,6 +66,8 @@ class Security(Base):
     ticker: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), index=True)
     cik: Mapped[int | None] = mapped_column(Integer, index=True)
+    # Legal Entity Identifier, for companies whose fundamentals come from ESEF reports (EU issuers).
+    lei: Mapped[str | None] = mapped_column(String(20), index=True)
     exchange: Mapped[str | None] = mapped_column(String(32), index=True)
     source: Mapped[str] = mapped_column(String(64))
     # False when the ticker disappeared from the latest source file.
@@ -502,3 +504,39 @@ class JobRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     status: Mapped[str] = mapped_column(String(16), default="running")  # running | ok | error
     message: Mapped[str] = mapped_column(Text, default="")
+
+
+# ----------------------------------------------------------------- ESEF (EU annual reports)
+class EsefFiling(Base):
+    """One ESEF annual financial report (inline XBRL) that was imported."""
+
+    __tablename__ = "esef_filings"
+    __table_args__ = (UniqueConstraint("lei", "period_end", "sha256"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lei: Mapped[str] = mapped_column(String(20), index=True)
+    entity_name: Mapped[str] = mapped_column(String(255), default="")
+    period_end: Mapped[date] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(32))  # upload | filings.xbrl.org
+    source_ref: Mapped[str] = mapped_column(String(500), default="")  # file name or filing URL
+    viewer_url: Mapped[str] = mapped_column(String(500), default="")
+    sha256: Mapped[str] = mapped_column(String(64))
+    fact_count: Mapped[int] = mapped_column(Integer, default=0)
+    imported_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class EsefFact(Base):
+    """A reported, non-dimensional numeric fact from an ESEF report, exactly as tagged."""
+
+    __tablename__ = "esef_facts"
+    __table_args__ = (Index("ix_esef_facts_lei_concept", "lei", "concept"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filing_id: Mapped[int] = mapped_column(ForeignKey("esef_filings.id", ondelete="CASCADE"), index=True)
+    lei: Mapped[str] = mapped_column(String(20))
+    taxonomy: Mapped[str] = mapped_column(String(32))  # ifrs-full | company extension prefix
+    concept: Mapped[str] = mapped_column(String(200))
+    unit: Mapped[str] = mapped_column(String(32))
+    start: Mapped[date | None] = mapped_column(Date)
+    end: Mapped[date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(DecimalString)

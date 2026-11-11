@@ -12,6 +12,56 @@ _Last updated: 2026-11-11 (Phase 5: all planned phases delivered)_
 | **4** | Screener, DCF, comparison, portfolio management, dividends | ✅ **Done**: tested with fixtures; SEC frames to confirm on your machine |
 | **5** | News, alerts, multi-user, backups, remote access | ✅ **Done**: tested with fixtures; feeds and push to confirm on your setup |
 
+## Follow-up: European fundamentals (ESEF)
+
+Companies listed on EU regulated markets publish their annual financial report in **ESEF**: XHTML with
+**Inline XBRL** tags from the **IFRS taxonomy**, usually as a report package (.zip). The app now reads these, so
+European companies get the same company page, statements, ratios, DCF, comparison and AI grounding as US companies.
+
+**Two free ways in** (Markets → *European companies*, or the menu; importing is admin-only, viewing is for everyone):
+1. **Upload a report package or .xhtml**, from the company's investor-relations site or the national register (OAM).
+   It is parsed entirely on your server by a built-in Inline XBRL 1.1 parser (`backend/app/services/esef.py`):
+   - contexts, units (including EUR per share), `scale` and `sign`;
+   - number formats from the Transformation Registry (decimal comma, decimal point, dash = zero);
+   - values split across nested tags; deduplication of repeated facts.
+   - Safety: protection against XML attacks (defusedxml), zip bombs and zip-slip paths.
+2. **Fetch by LEI from filings.xbrl.org** (XBRL International's free ESEF repository, which publishes reports
+   converted to **xBRL-JSON**). The latest five years can be fetched, and xBRL-JSON's exclusive period ends are handled.
+
+Then **link a ticker** (e.g. `MC.PA`), so the issuer appears in search, watchlists, portfolios, alerts and company pages.
+
+**Data rules:**
+- Only non-dimensional numeric facts (consolidated totals) are used. Breakdowns (segments, equity components…) are
+  skipped and counted.
+- Standard IFRS concepts map to the same statement lines as US companies; more IFRS alternatives were added.
+  Company-specific extension tags are stored but not mapped, so a line can legitimately show "—".
+- A later report's restated comparatives replace earlier figures (the same "latest filing wins" rule as SEC data).
+  Re-importing the same file changes nothing.
+- ESEF reports are **annual**, so the quarterly view is empty, with an explanation. Nothing is estimated.
+
+**Tests** (`backend/tests/test_esef.py`, 7 new; **71 total pass**). All use a synthetic report for a fictional
+"Example Europa SE" (`tests/esef_fixtures.py`) and cover:
+- LEI check digits;
+- iXBRL parsing: nested text, decimal comma, scale, sign, dash-as-zero, per-share unit, skipped segment fact,
+  deduplication, extension concept;
+- xBRL-JSON period semantics;
+- upload → idempotent re-upload → ticker linking (and refusal of SEC tickers) → company page, annual and (empty)
+  quarterly statements, ratios, filings and DCF pre-fill in EUR;
+- filings.xbrl.org import with restated comparatives (mocked);
+- rejection of XML attacks, non-ESEF files and reports without tags; admin-only import;
+- AI context labelled as ESEF/IFRS with the LEI.
+
+End-to-end on a headless iPhone 14 Pro: upload the package through the page, link a ticker, then check the company overview
+and EUR statements.
+
+**Honest limitations:**
+- **filings.xbrl.org was not reachable from the build sandbox**, and its field names (`period_end`, `json_url`,
+  `viewer_url`, the `filter[entity.identifier]` filter) come from its public documentation and an open-source client,
+  not from a live test. If fetching fails on your machine, upload the report package instead, and tell me the error.
+- Real ESEF reports vary a lot (custom tags, unusual formats). Please import one real report and compare a few figures
+  with the PDF annual report.
+- Some issuers tag totals only with company-specific extension concepts. Those lines stay "—" rather than being guessed.
+
 ## Follow-up: time-weighted portfolio returns
 
 **Portfolio → Value** now opens on **Return (TWR)**, with "Value vs cost" still available. For each currency it shows:
@@ -440,6 +490,8 @@ next to every figure. Never present delayed data as real-time. Never invent miss
 | Provider | Status | Free? | Card? | Rate / quota limits | Coverage | History | Terms / attribution |
 |---|---|---|---|---|---|---|---|
 | **SEC EDGAR**: `company_tickers_exchange.json` | ✅ **In use** | Yes, no key | No | ≤ 10 requests/second per user; must send a User-Agent with a contact e-mail. We make **1 request per sync, ≤ 1 per hour** | US SEC registrants (~10k tickers, incl. exchange) | Current snapshot | US public-domain government data; follow the SEC fair-access policy |
+| **ESEF annual reports** (upload) | ✅ **In use** | Yes | No | None | EU-listed issuers' IFRS annual reports | One report per year you import | Published reports from the issuer / national OAM; parsed locally |
+| **filings.xbrl.org** (ESEF, xBRL-JSON) | ✅ Optional (admin "fetch by LEI") | Yes, no key | No | No published hard limit; we fetch ≤ 5 reports per request, on demand only | Most EU ESEF filers | Since 2020/2021 reports | Run by XBRL International; its About page states no restrictions on data use (check current terms) |
 | **SEC EDGAR**: XBRL `companyfacts` / `submissions` | ✅ **In use** | Yes, no key | No | Same 10 req/s policy. We space requests to ≤ 5/s and refresh each company at most daily | US-GAAP and IFRS filers' reported financials, filing index | Varies by company (XBRL from ~2009) | Same as above |
 | **ECB Data Portal** (EXR) | ✅ **In use** | Yes, no key | No | No published hard quota; we refresh at most every 6 h (one request) | Euro FX reference rates (14 currencies) | We store the last 30 fixings plus accumulated history | Free reuse with source attribution (ECB statistics reuse policy) |
 | **CSV price import** | ✅ **In use** | Yes | No | None | Whatever you import | Whatever you import | Only import data you are entitled to use; source label required |
@@ -486,7 +538,6 @@ If Ollama is not running, the app shows a clear "AI is unavailable" message and 
    download the screener data, add 1–2 feeds, and install Ollama with a model.
 2. Set up HTTPS with Tailscale, install the PWA on your phone, turn on push and send a test.
 3. Possible improvements:
-   - ESEF (EU) annual-report parsing for European fundamentals;
    - OCR via local Tesseract for scanned PDFs;
    - encrypted backups;
    - a per-user choice of base currency for all totals.

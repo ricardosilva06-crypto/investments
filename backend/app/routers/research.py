@@ -30,6 +30,8 @@ def _sec(db: Session, ticker: str) -> Security:
 def _facts(db: Session, s: Security) -> tuple[list[FinancialFact], dict[str, str]]:
     errors: dict[str, str] = {}
     if not s.cik:
+        if s.lei:
+            return fundamentals.facts_for_security(db, s), {}
         return [], {"sec": "No SEC CIK for this security"}
     try:
         errors = fundamentals.refresh_company(db, s.cik)
@@ -213,7 +215,7 @@ def dcf_inputs(ticker: str, db: Session = Depends(get_db), _: User = Depends(get
     s = _sec(db, ticker)
     facts, errors = _facts(db, s)
     if not facts:
-        raise HTTPException(404, "No SEC financial data available for this company, so a DCF cannot be pre-filled.")
+        raise HTTPException(404, "No SEC or ESEF financial data available for this company, so a DCF cannot be pre-filled.")
     inc = fundamentals.build_statement(facts, "income", "annual", limit=6)
     cf = fundamentals.build_statement(facts, "cashflow", "annual", limit=6)
     bal = fundamentals.build_statement(facts, "balance", "annual", limit=1)
@@ -229,7 +231,7 @@ def dcf_inputs(ticker: str, db: Session = Depends(get_db), _: User = Depends(get
         raise HTTPException(404, "Operating cash flow and capital expenditure are not both reported, so free cash flow cannot be computed.")
     latest = out["history"][0]
     out["fields"]["base_fcf"] = _field(Decimal(latest["fcf"]), "Base free cash flow", "calculated",
-                                        f"Operating cash flow − capex, fiscal year ended {latest['end']} (SEC XBRL)")
+                                        f"Operating cash flow − capex, fiscal year ended {latest['end']} ({'ESEF report' if s.lei and not s.cik else 'SEC XBRL'})")
 
     revs = [(p["end"], Decimal(c["value"])) for p, c in zip(inc["periods"], _row(inc, "revenue")) if c]
     growth, gsrc = Decimal("0.05"), "Default assumption (no 3-year revenue history)"

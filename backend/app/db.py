@@ -97,6 +97,7 @@ def reset_engine() -> None:
 # tables, so these are added in place (additive only, never destructive).
 ADDED_COLUMNS = [
     ("notes", "is_shared", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("securities", "lei", "VARCHAR(20)"),
 ]
 
 
