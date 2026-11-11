@@ -73,7 +73,7 @@ function PositionCard({ p }: { p: Position }) {
         <div className="min-w-0 flex-1">
           {p.security_ticker ? (
             <Link
-              href={`/company?t=${encodeURIComponent(p.security_ticker)}`}
+              href={`/prices?t=${encodeURIComponent(p.security_ticker)}`}
               className="font-semibold"
             >
               {p.symbol}
@@ -626,8 +626,8 @@ export default function PortfolioPage() {
               </div>
               <SourceLine>
                 Cost basis and realised P/L are calculated from your
-                transactions (average-cost method). Market values use stored
-                end-of-day closes.
+                transactions (average-cost method). Market values use the
+                end-of-day closes you imported (Menu → Prices).
               </SourceLine>
             </>
           )}

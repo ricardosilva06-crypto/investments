@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Eye, House, LineChart, Sparkles } from "lucide-react";
+import { Briefcase, Eye, FileText, House } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const NAV = [
   { href: "/", label: "Home", icon: House },
-  { href: "/markets", label: "Markets", icon: LineChart },
   { href: "/watchlist", label: "Watchlist", icon: Eye },
-  { href: "/analyst", label: "AI Analyst", icon: Sparkles },
   { href: "/portfolio", label: "Portfolio", icon: Briefcase },
+  { href: "/notes", label: "Notes", icon: FileText },
 ] as const;
 
 export function BottomNav() {
@@ -20,7 +19,7 @@ export function BottomNav() {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-nav pb-safe backdrop-blur-xl backdrop-saturate-150"
     >
-      <ul className="mx-auto grid max-w-xl grid-cols-5">
+      <ul className="mx-auto grid max-w-xl grid-cols-4">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (

@@ -1,14 +1,15 @@
 import type { NextConfig } from "next";
 
 /**
- * Production: a fully static export (`out/`) served by the FastAPI backend on
- * the same origin, so one process on your own machine serves everything.
- * Development: `next dev` proxies /api to the FastAPI dev server.
+ * A fully static app (no server): `next build` writes `out/`, which any static host can serve.
+ * On GitHub Pages the site lives under /<repository>, set through NEXT_PUBLIC_BASE_PATH.
  */
-const isProd = process.env.NODE_ENV === "production";
-const apiTarget = process.env.II_API_URL ?? "http://127.0.0.1:8000";
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 const nextConfig: NextConfig = {
+  output: "export",
+  basePath: basePath || undefined,
+  trailingSlash: true,
   reactStrictMode: true,
   poweredByHeader: false,
   images: { unoptimized: true },
@@ -20,13 +21,6 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  ...(isProd
-    ? { output: "export" as const }
-    : {
-        async rewrites() {
-          return [{ source: "/api/:path*", destination: `${apiTarget}/api/:path*` }];
-        },
-      }),
 };
 
 export default nextConfig;

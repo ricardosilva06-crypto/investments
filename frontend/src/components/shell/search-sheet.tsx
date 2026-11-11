@@ -12,7 +12,7 @@ const GROUPS: { type: SearchHit["type"]; label: string }[] = [
   { type: "holding", label: "Your holdings" },
   { type: "watchlist", label: "Watchlists" },
   { type: "note", label: "Notes" },
-  { type: "security", label: "Companies (SEC EDGAR)" },
+  { type: "security", label: "Your securities" },
 ];
 
 function useDebounced<T>(value: T, ms: number) {
@@ -70,13 +70,13 @@ export function SearchSheet({ open, onOpenChange }: { open: boolean; onOpenChang
         <div className="px-4 pb-8">
           {!dq && (
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              Search US-listed companies from the SEC EDGAR list, plus your own holdings, watchlists and notes.
+              Search your holdings, watchlists, notes and the securities you added. Everything is searched on this device.
             </p>
           )}
           {error && <p className="mt-6 text-center text-sm text-negative">{(error as Error).message}</p>}
           {dq && data && data.length === 0 && (
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              No results for “{dq}”. If the company list is empty, an administrator needs to sync it from SEC EDGAR.
+              No results for “{dq}”. Add a security from the Watchlist tab (+) or by importing prices.
             </p>
           )}
           {data &&
