@@ -78,6 +78,19 @@ The server refreshes news feeds (30 min), ECB rates (6 h), SEC data, optional pr
 held company (daily, 22:00 UTC), and makes a backup (03:00 UTC). The computer must be on at those times; missed jobs
 run at the next start. You can see them and run them manually in **Administration → Scheduled jobs**.
 
+### Reading scanned PDFs (optional, free)
+
+Scanned annual reports are read with the open-source **Tesseract** OCR engine on your server:
+
+```bash
+sudo apt install tesseract-ocr tesseract-ocr-por      # Debian/Ubuntu (add tesseract-ocr-<lang> per language)
+brew install tesseract tesseract-lang                 # macOS
+# Windows: install from github.com/UB-Mannheim/tesseract/wiki
+```
+
+Set the default OCR languages in `backend/.env`, e.g. `II_OCR_LANGUAGES=eng+por`. Without Tesseract, scanned PDFs are
+refused with these instructions. Normal (text) PDFs never need it.
+
 ## 2. Inviting friends
 
 Accounts are **invite-only**. As admin: open the profile menu → **Administration** → **Invites** →

@@ -12,6 +12,42 @@ _Last updated: 2026-11-11 (Phase 5: all planned phases delivered)_
 | **4** | Screener, DCF, comparison, portfolio management, dividends | ✅ **Done**: tested with fixtures; SEC frames to confirm on your machine |
 | **5** | News, alerts, multi-user, backups, remote access | ✅ **Done**: tested with fixtures; feeds and push to confirm on your setup |
 
+## Follow-up: OCR for scanned PDFs
+
+Scanned PDFs (no text layer) are no longer refused. They are read with **local OCR**, so the AI analyst can search and cite them.
+
+- **Engine:** **Tesseract** (open source, Apache-2.0) through PyMuPDF, on your server. Nothing leaves the machine, and there is no paid service.
+- **Per page:** a page with (almost) no text but an image is treated as scanned. Normal text pages keep their exact text,
+  so mixed PDFs work and only the scanned pages are OCR'd.
+- **In the background:** the upload returns immediately. The document shows "Reading scans (OCR)… n/N", then the
+  usual keyword or semantic indexing runs.
+- **Languages:** detected from the installed Tesseract language packs. Choose one per upload, or set a default with
+  `II_OCR_LANGUAGES` (e.g. `eng+por+deu+fra`). Unknown languages are rejected with the list of installed ones.
+- **Honesty:**
+  - OCR'd text is flagged per chunk, and each document shows "N pages read with OCR — check important numbers against the PDF";
+  - AI sources from OCR pages are labelled "(OCR)", and the model is told that recognised numbers may contain errors;
+  - the existing number check still compares every figure with the (OCR) source text.
+- **Without Tesseract**, or with `II_OCR=off`: scanned PDFs are refused with install instructions. A mixed PDF still
+  indexes its text pages and says which pages were skipped.
+- **Limits:** `II_OCR_MAX_PAGES` (default 300), `II_OCR_DPI` (default 300). Roughly 1–3 s per page on a normal CPU.
+- **Schema:** `documents.ocr_pages`, `documents.ocr_language` and `document_chunks.ocr` are added in place to existing databases.
+
+**Tests** (`backend/tests/test_ocr.py`, 6 new; **77 total pass**). They run the **real Tesseract engine** where it is
+installed, and are skipped otherwise:
+- language detection and validation;
+- a scanned page OCR'd, made searchable and flagged;
+- a mixed PDF where only the scanned page is OCR'd;
+- refusal with instructions when OCR is off;
+- unknown language rejected;
+- AI sources labelled "(OCR)".
+
+End-to-end on a headless iPhone 14 Pro: a 4-page PDF with 3 scanned pages was uploaded, OCR'd and indexed.
+
+**Limitations:**
+- OCR quality depends on the scan. Tables come out as lines of text, and digits can be misread (e.g. 8/3, 1/7),
+  which is why OCR'd figures are labelled everywhere.
+- Handwriting and very low-resolution scans are not reliable.
+
 ## Follow-up: European fundamentals (ESEF)
 
 Companies listed on EU regulated markets publish their annual financial report in **ESEF**: XHTML with
@@ -307,7 +343,7 @@ now includes AI conversations and the document list.
 - The number check confirms that a figure **appears** in the sources. It cannot confirm the figure is attributed
   to the right line or year, and it cannot verify arithmetic. Always read the cited source for important decisions.
 - Local inference is slow on CPUs (tens of seconds per answer). The first request also loads the model into memory.
-- No OCR for scanned PDFs. Tables in PDFs are extracted as plain text, so complex tables may lose structure.
+- Scanned PDFs need the optional Tesseract OCR engine (see the OCR follow-up). Tables in PDFs are extracted as plain text, so complex tables may lose structure.
 - Backups: the SQLite backup does **not** include the PDF files in `backend/data/documents/`. Back up that
   folder too.
 
@@ -464,6 +500,7 @@ Optional integrations must say so and must degrade gracefully when absent. No pa
 | Ollama + open models | Local AI analyst | Yes | No | Hardware only | No | MIT (Ollama); model licences vary (e.g. Llama community licence, Qwen Apache-2.0); check per model |
 | PyMuPDF | PDF text extraction | Yes | No | No | No | **AGPL-3.0** (free; fine for private self-hosting of this unmodified-for-distribution app. A commercial licence is only needed for closed-source distribution). Alternative: `pypdf` (BSD) |
 | numpy | Vector similarity for document search | Yes | No | No | No | BSD |
+| Tesseract OCR (optional, system package) | Reading scanned PDF pages | Yes | No | No | No | Apache-2.0; installed with apt / brew / Windows installer |
 | python-multipart | File uploads | Yes | No | No | No | Apache-2.0 |
 | defusedxml | Safe RSS/Atom parsing | Yes | No | No | No | PSF |
 | pywebpush (+ py-vapid, cryptography) | Optional Web Push | Yes | No | No | No | MPL-2.0 / Apache-2.0 or BSD |
@@ -538,6 +575,5 @@ If Ollama is not running, the app shows a clear "AI is unavailable" message and 
    download the screener data, add 1–2 feeds, and install Ollama with a model.
 2. Set up HTTPS with Tailscale, install the PWA on your phone, turn on push and send a test.
 3. Possible improvements:
-   - OCR via local Tesseract for scanned PDFs;
    - encrypted backups;
    - a per-user choice of base currency for all totals.

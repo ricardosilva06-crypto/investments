@@ -128,7 +128,7 @@ def test_document_upload_index_and_privacy(admin_client, ollama, app_env):
     bad = admin_client.post("/api/documents", files={"file": ("x.pdf", b"not a pdf at all", "application/pdf")}, headers=HDR)
     assert bad.status_code == 422
     scanned = admin_client.post("/api/documents", files={"file": ("s.pdf", make_pdf([""]), "application/pdf")}, headers=HDR)
-    assert scanned.status_code == 422 and "scanned" in scanned.json()["detail"]
+    assert scanned.status_code == 422 and "No extractable text" in scanned.json()["detail"]  # blank page, no image
     assert admin_client.delete(f"/api/documents/{doc['id']}", headers=HDR).status_code == 204
     assert admin_client.get("/api/documents").json() == []
 
