@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     tiingo_max_per_hour: int = 40
     tiingo_max_per_day: int = 400
 
+    # Claude connector (remote MCP server for the Claude apps, incl. iPhone). Disabled while empty.
+    # Public HTTPS base URL that Anthropic's servers can reach, without trailing slash, e.g.
+    # "https://mac-mini.tailXXXX.ts.net:8443" (Tailscale Funnel to the connector process on port 8001).
+    connector_public_url: str = ""
+    # Exact OAuth redirect URIs accepted from Claude (hosted apps: web, desktop, mobile).
+    connector_redirect_uris: str = "https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback"
+    connector_access_minutes: int = 60
+    connector_refresh_days: int = 30
+    # Allow the connector to save notes (the only tool that writes). False = read-only connector.
+    connector_write_tools: bool = True
+
     # Minimum seconds between two syncs of the same data source.
     min_sync_interval_seconds: int = 3600
 

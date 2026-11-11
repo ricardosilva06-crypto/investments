@@ -263,3 +263,32 @@ def export_my_data(db: Session = Depends(get_db), user: User = Depends(get_curre
     return JSONResponse(
         payload, headers={"Content-Disposition": f'attachment; filename="investor-intelligence-{user.username}-{stamp}.json"'}
     )
+
+
+# ---------------------------------------------------------------- Claude connector
+@router.get("/account/connector")
+def connector_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    from ..config import get_settings
+    from ..services import oauth
+
+    return {
+        "enabled": oauth.enabled(),
+        "mcp_url": oauth.mcp_url() if oauth.enabled() else None,
+        "write_tools": get_settings().connector_write_tools,
+        "connections": [
+            {"id": g.id, "client_name": g.client_name or "Claude", "created_at": g.created_at,
+             "last_used_at": g.last_used_at}
+            for g in oauth.active_grants(db, user.id)
+        ],
+    }
+
+
+@router.delete("/account/connector/{grant_id}", status_code=204)
+def revoke_connector(grant_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    from ..models import OAuthGrant
+
+    g = db.scalar(select(OAuthGrant).where(OAuthGrant.id == grant_id, OAuthGrant.user_id == user.id))
+    if g is None:
+        raise HTTPException(404, "Connection not found")
+    g.revoked = True
+    db.commit()

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import useSWR from "swr";
-import { Download, Laptop, Smartphone } from "lucide-react";
+import { Bot, Check, Copy, Download, Laptop, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, NativeSelect } from "@/components/ui/input";
@@ -13,6 +13,89 @@ import { useAuth, useTheme } from "@/components/providers";
 import { api } from "@/lib/api";
 import { fmtRelative } from "@/lib/format";
 import type { Preferences } from "@/lib/types";
+
+type ConnectorStatus = {
+  enabled: boolean;
+  mcp_url: string | null;
+  write_tools: boolean;
+  connections: { id: number; client_name: string; created_at: string; last_used_at: string | null }[];
+};
+
+function ConnectorCard() {
+  const { data, mutate } = useSWR<ConnectorStatus>("/api/account/connector");
+  const [copied, setCopied] = React.useState(false);
+  if (!data) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Claude connector</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-[14px]">
+        {!data.enabled ? (
+          <p className="text-muted-foreground">
+            Not set up on this server. The administrator enables it with <code>II_CONNECTOR_PUBLIC_URL</code> (see docs/CONNECTOR.md).
+          </p>
+        ) : (
+          <>
+            <p className="text-muted-foreground">
+              Ask Claude (iPhone, web or desktop app) about your portfolios, notes and uploaded PDFs. In Claude: Customize → Connectors →
+              Add custom connector, paste this URL, then sign in with your app username and password.
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/40 px-2 py-2 text-[12px]">{data.mcp_url}</code>
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label="Copy connector URL"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(data.mcp_url ?? "");
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {
+                    /* clipboard unavailable (e.g. plain http); the URL can be selected manually */
+                  }
+                }}
+              >
+                {copied ? <Check /> : <Copy />}
+              </Button>
+            </div>
+            <p className="text-[12px] text-muted-foreground">
+              What Claude reads is sent to Anthropic to answer you. {data.write_tools ? "It can also save new notes." : "Read-only."}
+            </p>
+          </>
+        )}
+      </CardContent>
+      {data.connections.length > 0 && (
+        <ul className="divide-y divide-border/60 border-t border-border/60 pb-1">
+          {data.connections.map((c) => (
+            <li key={c.id} className="flex items-center gap-3 px-4 py-3">
+              <Bot className="size-4 text-muted-foreground" />
+              <div className="flex-1">
+                <p className="font-medium">{c.client_name}</p>
+                <p className="text-[12px] text-muted-foreground">
+                  Connected {fmtRelative(c.created_at)}
+                  {c.last_used_at ? ` · used ${fmtRelative(c.last_used_at)}` : ""}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-negative"
+                onClick={async () => {
+                  await api(`/api/account/connector/${c.id}`, { method: "DELETE" });
+                  mutate();
+                }}
+              >
+                Revoke
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 type SessionRow = { id: number; user_agent: string; created_at: string; last_seen_at: string; current: boolean };
 
@@ -153,6 +236,8 @@ export default function SettingsPage() {
           ))}
         </ul>
       </Card>
+
+      <ConnectorCard />
 
       <Card>
         <CardHeader>

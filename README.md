@@ -91,6 +91,13 @@ brew install tesseract tesseract-lang                 # macOS
 Set the default OCR languages in `backend/.env`, e.g. `II_OCR_LANGUAGES=eng+por`. Without Tesseract, scanned PDFs are
 refused with these instructions. Normal (text) PDFs never need it.
 
+### Ask Claude from your phone (optional)
+
+If you use the Claude app, you can add Investor Intelligence as a **custom connector** and ask Claude about your
+portfolios, notes and uploaded PDFs from the iPhone, with no API key and no pay-per-use. It runs as a separate,
+minimal public process (`./run-connector.sh` + Tailscale Funnel) while the app itself stays private. Data Claude
+reads is sent to Anthropic. Setup and security notes: [docs/CONNECTOR.md](docs/CONNECTOR.md).
+
 ## 2. Inviting friends
 
 Accounts are **invite-only**. As admin: open the profile menu → **Administration** → **Invites** →

@@ -543,3 +543,52 @@ class EsefFact(Base):
     start: Mapped[date | None] = mapped_column(Date)
     end: Mapped[date] = mapped_column(Date)
     value: Mapped[Decimal] = mapped_column(DecimalString)
+
+
+class OAuthClient(Base):
+    """An OAuth client registered through Dynamic Client Registration (the Claude apps)."""
+
+    __tablename__ = "oauth_clients"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    client_name: Mapped[str] = mapped_column(String(200), default="")
+    redirect_uris: Mapped[str] = mapped_column(Text)  # JSON list
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class OAuthCode(Base):
+    """Short-lived, single-use authorization code (only its hash is stored)."""
+
+    __tablename__ = "oauth_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    client_id: Mapped[str] = mapped_column(String(64))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    redirect_uri: Mapped[str] = mapped_column(Text)
+    code_challenge: Mapped[str] = mapped_column(String(128))
+    scope: Mapped[str] = mapped_column(String(200), default="")
+    resource: Mapped[str] = mapped_column(String(500), default="")
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class OAuthGrant(Base):
+    """Access a user gave to a connector client. Tokens are stored as SHA-256 hashes only;
+    the refresh token rotates on every use."""
+
+    __tablename__ = "oauth_grants"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[str] = mapped_column(String(64), index=True)
+    client_name: Mapped[str] = mapped_column(String(200), default="")
+    scope: Mapped[str] = mapped_column(String(200), default="")
+    access_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    access_expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    refresh_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    refresh_expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
