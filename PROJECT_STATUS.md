@@ -12,6 +12,32 @@ _Last updated: 2026-11-11 (Phase 5: all planned phases delivered)_
 | **4** | Screener, DCF, comparison, portfolio management, dividends | ✅ **Done**: tested with fixtures; SEC frames to confirm on your machine |
 | **5** | News, alerts, multi-user, backups, remote access | ✅ **Done**: tested with fixtures; feeds and push to confirm on your setup |
 
+## Follow-up: time-weighted portfolio returns
+
+**Portfolio → Value** now opens on **Return (TWR)**, with "Value vs cost" still available. For each currency it shows:
+- a chart of cumulative time-weighted return;
+- **TWR since start**, **TWR per year** (only with ≥ 1 year of history), **year to date** and **last 12 months**;
+- **money-weighted return (XIRR)** per year, for comparison.
+
+**Method** (`backend/app/services/portfolio_analytics.py`):
+- Daily-linked TWR from stored end-of-day closes, with flows at the end of the day:
+  r = (V_t − buys + sells + dividends) / V_{t−1} − 1.
+  The first day, or a day after holding nothing, uses r = (V_t + outflows) / buys − 1.
+- Trades are valued at their transaction prices, fees reduce the return, and dividends count as income.
+- A full exit is recorded at value 0, so its proceeds count.
+- Days without a complete valuation (a holding with no close within 7 days) are **skipped, not estimated**. Their cash
+  flows carry to the next valued day, so the chain stays correct, and the number of skipped days is shown.
+- Period returns (YTD, 1Y) are shown only when the history reaches back to the period start.
+- XIRR uses the actual trade dates. The final value counts as a flow at the last valued close.
+- Per currency, no FX conversion.
+
+**Tests** (`backend/tests/test_returns.py`, 5 new; **64 total pass**). All are checked against hand calculations:
+- extra deposits don't change the TWR (+10% then +10% → exactly 21%);
+- fees, dividends and a full exit;
+- a real valuation gap skipped and chained across;
+- XIRR of −1,000 → +1,100 over one year = 10%;
+- a badly timed deposit gives a negative XIRR while the TWR stays +20%.
+
 ## Phase 5: what was delivered
 
 **News** (`/news`, menu, and a "Latest for your companies" card on Home)
@@ -159,8 +185,7 @@ at start-up by a small additive migration helper. Existing databases from earlie
   fiscal-year statements with provenance).
 - DCF needs positive free cash flow to be meaningful (the app warns otherwise). Net cash ignores leases, pensions
   and minority interests.
-- Value history is not a performance measure that adjusts for deposits (no time-weighted or money-weighted
-  return yet).
+- Value history on its own is not a performance measure; see the time-weighted return added afterwards.
 
 ## Phase 3: what was delivered
 
@@ -461,7 +486,6 @@ If Ollama is not running, the app shows a clear "AI is unavailable" message and 
    download the screener data, add 1–2 feeds, and install Ollama with a model.
 2. Set up HTTPS with Tailscale, install the PWA on your phone, turn on push and send a test.
 3. Possible improvements:
-   - time-weighted portfolio returns;
    - ESEF (EU) annual-report parsing for European fundamentals;
    - OCR via local Tesseract for scanned PDFs;
    - encrypted backups;
