@@ -33,7 +33,8 @@ cd backend
 ```
 
 Financial statements are downloaded from SEC EDGAR the first time someone opens a company,
-then refreshed at most daily.
+then refreshed at most daily. The **screener** needs a one-time download (Screener page → "Download from SEC",
+16 requests) and can be refreshed from the same page.
 
 **Prices (optional):** the app never invents prices. Either import a daily CSV in
 **Administration → End-of-day prices** (columns `Date,Close`, optionally `Open,High,Low,Volume`), or
@@ -133,10 +134,11 @@ A private network (Tailscale or WireGuard) avoids all of this, which is why it's
 backend/
   app/main.py            FastAPI app, CSRF + security headers, serves the static PWA
   app/models.py          SQLite schema (SQLAlchemy 2)
-  app/routers/           auth, securities/search, companies (profile/financials/filings/prices/fx), watchlists, notes, portfolios, account, admin
+  app/routers/           auth, securities/search, companies (profile/financials/filings/prices/fx), research (screener/compare/DCF),
+                         watchlists, notes, portfolios (+ analytics, CSV import), account, admin, ai
   app/services/          sec + sec_client (EDGAR), fundamentals (XBRL statements), prices (CSV/Tiingo), ecb (FX),
                          llm (model abstraction, Ollama), documents (PDF + RAG), analyst (grounding + number check),
-                         portfolio ledger, backup
+                         screener (SEC frames), valuation (DCF), portfolio ledger + analytics, backup
   app/cli.py             create-admin, create-invite, sync-sec, backup
   tests/                 pytest suite (auth, isolation, ledger, sync, backups)
 frontend/

@@ -3,7 +3,8 @@
 import * as React from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
-import { Building2, Loader2, Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { Building2, Loader2, Plus, Scale, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorNote, PageHeader, SourceLine } from "@/components/page";
@@ -43,6 +44,19 @@ export default function MarketsPage() {
   return (
     <div>
       <PageHeader title="Markets" subtitle="Reference rates and SEC-registered securities" />
+
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <Link href="/screener" className="rounded-2xl border border-border/60 bg-card p-3 active:scale-[0.98]">
+          <SlidersHorizontal className="size-5 text-primary" />
+          <p className="mt-1.5 font-semibold">Screener</p>
+          <p className="text-[12px] text-muted-foreground">Filter all US filers by growth, margins, ROE…</p>
+        </Link>
+        <Link href="/compare" className="rounded-2xl border border-border/60 bg-card p-3 active:scale-[0.98]">
+          <Scale className="size-5 text-primary" />
+          <p className="mt-1.5 font-semibold">Compare</p>
+          <p className="text-[12px] text-muted-foreground">2–3 companies side by side</p>
+        </Link>
+      </div>
 
       <div className="mb-4">
         <FxCard />

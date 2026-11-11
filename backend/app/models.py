@@ -386,3 +386,34 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+# ----------------------------------------------------------------- Phase 4
+class ScreenFact(Base):
+    """One value per company from the SEC XBRL "frames" API (one concept, one calendar period, all filers)."""
+
+    __tablename__ = "screen_facts"
+    __table_args__ = (UniqueConstraint("period", "concept", "cik"), Index("ix_screen_period_concept", "period", "concept"))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period: Mapped[str] = mapped_column(String(12))  # CY2024 | CY2024Q4I
+    concept: Mapped[str] = mapped_column(String(160))
+    cik: Mapped[int] = mapped_column(Integer, index=True)
+    entity_name: Mapped[str] = mapped_column(String(255), default="")
+    value: Mapped[Decimal] = mapped_column(DecimalString)
+    end: Mapped[date | None] = mapped_column(Date)
+    accession: Mapped[str] = mapped_column(String(25), default="")
+
+
+class Valuation(Base):
+    """A saved DCF scenario. Inputs are the user's assumptions; private to the user."""
+
+    __tablename__ = "valuations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    ticker: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(120))
+    inputs: Mapped[str] = mapped_column(Text)  # JSON
+    summary: Mapped[str] = mapped_column(Text)  # JSON
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

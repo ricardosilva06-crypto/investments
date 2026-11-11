@@ -265,3 +265,76 @@ export type ChatMsg = {
 };
 export type ConversationSummary = { id: number; title: string; created_at: string; updated_at: string };
 export type ConversationDetail = ConversationSummary & { messages: ChatMsg[] };
+
+export type ScreenerMeta = Record<string, { label: string; kind: string }>;
+export type ScreenerItem = { cik: number; ticker: string | null; name: string; exchange: string | null; period_end: string | null; values: Record<string, string | null> };
+export type ScreenerResult = {
+  years: number[];
+  year: number | null;
+  metrics: ScreenerMeta;
+  source: string;
+  last_success_at: string | null;
+  status: string;
+  message: string;
+  total: number;
+  coverage: number;
+  items: ScreenerItem[];
+};
+
+export type DcfField = { value: string | number | null; label: string; kind: "reported" | "calculated" | "assumption" | "missing"; source: string };
+export type DcfInputs = {
+  ticker: string;
+  name: string;
+  currency: string;
+  errors: Record<string, string>;
+  fields: Record<string, DcfField>;
+  history: { end: string; fcf: string; cfo: string; capex: string }[];
+  price: { close: string; date: string; source: string } | null;
+};
+export type DcfResult = {
+  result: {
+    projection: { year: number; growth: string; fcf: string; discount_factor: string; pv: string }[];
+    pv_fcf: string;
+    terminal_value: string;
+    pv_terminal: string;
+    terminal_share: string | null;
+    enterprise_value: string;
+    equity_value: string;
+    per_share: string;
+    upside: string | null;
+    implied_multiple: string | null;
+    warning?: string;
+  };
+  sensitivity: { discount_rates: string[]; terminal_growths: string[]; per_share: (string | null)[][] };
+};
+export type SavedValuation = { id: number; ticker: string; name: string; inputs: Record<string, string | number>; summary: Record<string, string | null>; created_at: string };
+
+export type CompareCompany = {
+  ticker: string;
+  name: string;
+  currency: string | null;
+  fiscal_year_end: string | null;
+  fields: Record<string, FinCell | null>;
+  quote: { close: string; date: string; source: string; currency: string } | null;
+  pe: string | null;
+  history: { end: string; revenue: string | null; net_income: string | null; fcf: string | null }[];
+  errors: Record<string, string>;
+};
+export type CompareResult = { fields: { key: string; label: string; kind: string }[]; companies: CompareCompany[] };
+
+export type Analytics = {
+  allocation: {
+    items: { symbol: string; currency: string; value: string; basis: "market" | "cost"; price_date: string | null; weight_in_currency: string | null; value_base?: string; weight_total?: string | null }[];
+    totals: Record<string, string>;
+    base: null | { currency: string; error?: string; total?: string; rate_date?: string; includes_cost_basis?: boolean; note?: string };
+  };
+  history: Record<string, { date: string; value: string | null; cost: string }[]>;
+  dividends: {
+    by_year: Record<string, { year: number; amount: string }[]>;
+    ttm_by_currency: Record<string, string>;
+    last_12_months: Record<string, { month: string; amount: string }[]>;
+    by_symbol: { symbol: string; currency: string; total: string; ttm: string; payments: number; last_date: string; cost_basis: string | null; yield_on_cost: string | null }[];
+    note: string;
+  };
+  history_note: string;
+};

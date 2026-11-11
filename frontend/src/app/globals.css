@@ -22,6 +22,10 @@
   --warning: oklch(0.7 0.15 75);
   --ring: oklch(0.52 0.17 265 / 0.5);
   --nav: oklch(1 0 0 / 0.85);
+  /* Categorical chart series (validated reference palette, first 3 slots) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
   color-scheme: light;
 }
 
@@ -45,6 +49,9 @@
   --warning: oklch(0.8 0.14 80);
   --ring: oklch(0.74 0.13 265 / 0.5);
   --nav: oklch(0.17 0.01 260 / 0.82);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
   color-scheme: dark;
 }
 

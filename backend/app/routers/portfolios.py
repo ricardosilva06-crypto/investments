@@ -13,6 +13,7 @@ from ..deps import get_current_user
 from ..models import Portfolio, Security, Transaction, User
 from ..schemas import ORM
 from ..services.portfolio import LedgerError, build_ledger
+from ..services import portfolio_analytics as pa
 from ..services.prices import latest_quotes
 
 router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
@@ -269,3 +270,137 @@ def delete_transaction(
         db.rollback()
         raise HTTPException(422, f"Cannot delete: {exc}")
     db.commit()
+
+
+@router.get("/{portfolio_id}/analytics")
+def analytics(
+    portfolio_id: int,
+    base: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    p = owned_portfolio(db, user, portfolio_id)
+    txs = list(p.transactions)
+    if base is not None and (len(base) != 3 or not base.isalpha()):
+        raise HTTPException(422, "base must be a 3-letter currency code")
+    try:
+        alloc = pa.allocation(db, txs, base.upper() if base else None)
+    except LedgerError as exc:
+        raise HTTPException(422, str(exc))
+
+    def fmt(o):
+        if isinstance(o, Decimal):
+            return format(o, "f")
+        if isinstance(o, dict):
+            return {str(k): fmt(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [fmt(x) for x in o]
+        if isinstance(o, date):
+            return o.isoformat()
+        return o
+
+    return fmt({
+        "allocation": alloc,
+        "history": pa.value_history(db, txs),
+        "dividends": pa.dividends(txs),
+        "history_note": "Daily value from stored end-of-day closes. Days where any held symbol lacks a close within 7 days are left empty.",
+    })
+
+
+class ImportIn(BaseModel):
+    csv: str = Field(min_length=10, max_length=2_000_000)
+    default_currency: str = Field("EUR", min_length=3, max_length=3)
+
+
+IMPORT_ALIASES = {
+    "trade_date": ("date", "trade date", "trade_date", "data", "datum"),
+    "symbol": ("symbol", "ticker", "isin/ticker", "instrument"),
+    "kind": ("type", "kind", "action", "side", "transaction"),
+    "quantity": ("quantity", "qty", "shares", "units"),
+    "price": ("price", "price per share", "amount", "unit price"),
+    "fees": ("fees", "fee", "commission", "costs", "tax"),
+    "currency": ("currency", "ccy"),
+    "note": ("note", "notes", "comment", "description"),
+}
+KIND_ALIASES = {"buy": "buy", "b": "buy", "purchase": "buy", "sell": "sell", "s": "sell", "sale": "sell",
+                "dividend": "dividend", "div": "dividend", "dividends": "dividend"}
+
+
+def _num(raw: str) -> str:
+    """Accept 1234.5, 1,234.5, 1234,5 and 1.234,5; reject ambiguous 1,234 / 1.234 style values."""
+    v = raw.replace(" ", "").replace("\u00a0", "")
+    if not v:
+        return "0"
+    if "," in v and "." in v:
+        return v.replace(",", "") if v.rfind(".") > v.rfind(",") else v.replace(".", "").replace(",", ".")
+    if "," in v:
+        head, _, tail = v.rpartition(",")
+        if len(tail) == 3 and head.lstrip("-").isdigit() and v.count(",") == 1:
+            raise ValueError(f"ambiguous number '{raw}' (thousands or decimal separator?)")
+        return v.replace(",", ".") if v.count(",") == 1 else v.replace(",", "")
+    return v
+
+
+@router.post("/{portfolio_id}/import")
+def import_transactions(portfolio_id: int, data: ImportIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """All-or-nothing import of a transactions CSV (header row required)."""
+    import csv
+    import io
+
+    from pydantic import ValidationError
+
+    p = owned_portfolio(db, user, portfolio_id)
+    try:
+        dialect = csv.Sniffer().sniff(data.csv[:2048], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.reader(io.StringIO(data.csv), dialect)
+    header = [h.strip().lower().lstrip("\ufeff") for h in next(reader, [])]
+    cols = {k: next((i for i, h in enumerate(header) if h in aliases), None) for k, aliases in IMPORT_ALIASES.items()}
+    if any(cols[k] is None for k in ("trade_date", "symbol", "kind", "price")):
+        raise HTTPException(422, "CSV header needs at least: date, symbol, type, price (and quantity for buys/sells).")
+    parsed, errors = [], []
+    for n, row in enumerate(reader, start=2):
+        if not row or all(not c.strip() for c in row):
+            continue
+
+        def col(k, default=""):
+            i = cols[k]
+            return row[i].strip() if i is not None and i < len(row) else default
+
+        kind = KIND_ALIASES.get(col("kind").lower())
+        if kind is None:
+            errors.append(f"line {n}: unknown type '{col('kind')}'")
+            continue
+        try:
+            q_, pr_, fe_ = _num(col("quantity")), _num(col("price")), _num(col("fees"))
+        except ValueError as exc:
+            errors.append(f"line {n}: {exc}")
+            continue
+        try:
+            tx = TransactionIn(symbol=col("symbol"), kind=kind, trade_date=col("trade_date")[:10], quantity=q_, price=pr_, fees=fe_,
+                               currency=col("currency") or data.default_currency, note=col("note")[:2000])
+        except ValidationError as exc:
+            errors.append(f"line {n}: {exc.errors()[0]['msg'].replace('Value error, ', '')}")
+            continue
+        parsed.append(tx)
+        if len(errors) > 20:
+            break
+    if errors:
+        raise HTTPException(422, "Nothing imported. " + "; ".join(errors[:10]))
+    if not parsed:
+        raise HTTPException(422, "No transactions found in the file.")
+    if len(parsed) > 5000:
+        raise HTTPException(422, "Too many rows (max 5000 per import).")
+    secs = {s.ticker: s.id for s in db.scalars(select(Security).where(Security.ticker.in_({t.symbol for t in parsed})))}
+    for t in parsed:
+        db.add(Transaction(portfolio_id=p.id, security_id=secs.get(t.symbol), **t.model_dump()))
+    db.flush()
+    db.refresh(p)
+    try:
+        build_ledger(list(p.transactions))
+    except LedgerError as exc:
+        db.rollback()
+        raise HTTPException(422, f"Nothing imported: {exc}")
+    db.commit()
+    return {"imported": len(parsed)}

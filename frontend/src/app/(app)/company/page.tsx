@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { AlertTriangle, ChevronDown, ExternalLink, Eye, Loader2, NotebookPen, RefreshCw, Scale, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronDown, ExternalLink, Eye, Loader2, NotebookPen, RefreshCw, Scale, Sparkles, Calculator, Columns3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Segmented } from "@/components/ui/segmented";
@@ -241,15 +241,27 @@ export default function CompanyPage() {
         </Button>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <Button variant="outline" size="sm" asChild>
+      <div className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4">
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
           <Link href={`/analyst?task=company_analysis&t=${encodeURIComponent(s.ticker)}`}>
             <Sparkles /> AI analysis
           </Link>
         </Button>
-        <Button variant="outline" size="sm" asChild>
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
           <Link href={`/analyst?task=bull_bear&t=${encodeURIComponent(s.ticker)}`}>
             <Scale /> Bull vs bear
+          </Link>
+        </Button>
+        {data.has_financials && (
+          <Button variant="outline" size="sm" className="shrink-0" asChild>
+            <Link href={`/valuation?t=${encodeURIComponent(s.ticker)}`}>
+              <Calculator /> DCF
+            </Link>
+          </Button>
+        )}
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
+          <Link href={`/compare?t=${encodeURIComponent(s.ticker)}`}>
+            <Columns3 /> Compare
           </Link>
         </Button>
       </div>

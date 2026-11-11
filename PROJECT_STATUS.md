@@ -1,6 +1,6 @@
 # PROJECT STATUS: Investor Intelligence
 
-_Last updated: 2026-11-11 (Phase 3)_
+_Last updated: 2026-11-11 (Phase 4)_
 
 ## Summary
 
@@ -9,8 +9,80 @@ _Last updated: 2026-11-11 (Phase 3)_
 | **1** | Mobile-first UI, PWA, bottom navigation, dashboard, search, SQLite, local authentication | ✅ **Done**: runs locally, tested |
 | **2** | Company profiles, financial statements, historical data, market watchlists, charts | ✅ **Done**: tested with fixtures; live sources still to confirm on your machine |
 | **3** | AI analyst (Ollama), PDF upload & analysis, research reports, bull/bear | ✅ **Done**: tested with a mocked Ollama; run with a real model on your machine |
-| 4 | Screener, DCF, comparison, portfolio management, dividends | ⏳ Next. Partly started (ledger, cost basis, realised P/L, dividends, market value at stored close) |
-| 5 | News, alerts, multi-user, backups, remote access | Partly started (invite-only multi-user, backups, export, remote-access guide) |
+| **4** | Screener, DCF, comparison, portfolio management, dividends | ✅ **Done**: tested with fixtures; SEC frames to confirm on your machine |
+| 5 | News, alerts, multi-user, backups, remote access | ⏳ Next. Partly started (invite-only multi-user, backups, export, remote-access guide) |
+
+## Phase 4: what was delivered
+
+**Stock screener** (`/screener`, also linked from Markets and the menu)
+- Covers **all USD US-GAAP SEC filers** using the official XBRL **frames** API: one request per metric
+  returns that value for every company for one calendar year. A full download is 16 requests
+  (≤ 5/s; admin button or automatic prompt).
+- Metrics:
+  - reported: revenue (with concept fallback), net income, diluted EPS;
+  - calculated: revenue growth, net margin, operating margin, free cash flow and its margin, ROE,
+    long-term debt/equity, current ratio, EPS growth;
+  - P/E only where an end-of-day price is stored.
+- Min/max filters per metric, exchange filter, any sort order, and 4 presets. **Unknown values never pass a filter** and
+  always sort last. Each row shows the fiscal-year end its data comes from.
+- Honest scope: the SEC maps each fiscal year to the calendar year it most closely fits. IFRS and non-USD
+  filers are not in the screener (they still work on company pages).
+
+**Company comparison** (`/compare?t=A,B,C`, plus a button on each company page)
+- 2–3 companies: a revenue / net income / FCF history chart with a validated 3-colour palette plus dash patterns,
+  so identity isn't colour-only. The chart is shown only when all companies report in the same currency.
+- A side-by-side table: 15 reported and calculated metrics plus the last close and P/E.
+
+**DCF valuation** (`/valuation?t=…`, "DCF" button on company pages)
+- Inputs are pre-filled and **labelled by origin**:
+  - *Calculated*: base FCF = operating cash flow − capex; net cash = cash + short-term investments − debt.
+  - *Reported*: shares outstanding.
+  - *Assumption*: growth (suggested from the 3-year revenue CAGR, capped −5…15%), fade years, terminal growth 2.5%,
+    discount rate 9%.
+  - *Missing*: a value isn't reported, so it is not invented; you must enter it.
+- Two-stage model with linear fade to terminal growth, Gordon terminal value, enterprise → equity → per share.
+- Outputs: comparison with the stored close, a warning when the terminal value is > 75% of EV, a 5×5 sensitivity grid
+  (discount rate × terminal growth), a projection table, and a historical FCF chart.
+- Save, load and delete private scenarios.
+
+**Portfolio management**: new Holdings / Allocation / Value / Dividends views.
+- **Allocation**: weights by market value (stored close) or cost basis (flagged).
+  - Optional **total in your base currency** at ECB reference rates, with the rate date shown.
+  - A missing FX rate is reported, never guessed.
+- **Value history**: daily value vs cost basis from stored closes. A day is left empty if any held symbol lacks a
+  close within 7 days. It is labelled as not a time-weighted return.
+- **Transaction CSV import**: comma or semicolon separated, decimal commas accepted.
+  - All-or-nothing, and validated against the ledger (no oversells).
+  - Ambiguous numbers such as "1,234" are rejected.
+
+**Dividend tracking**
+- From your recorded dividend transactions (net of withholding): last-12-months income, a monthly income chart,
+  income per year, and per holding the total, last 12 months and **yield on cost**.
+- Upcoming dividends are **not** shown, because no free official source provides them.
+- Company financials now include **dividends declared per share** (XBRL) and a **payout ratio** (calculated).
+
+**Verification performed**
+- `pytest`: **48 tests pass**, including 7 new Phase 4 tests:
+  - frames sync: exact request count, revenue concept fallback, metric maths, filters with unknown values, sort validation;
+  - DCF arithmetic checked by hand (PV 200 + terminal 1,275 → 152.50/share), invalid r ≤ g, sensitivity centre, fade path;
+  - DCF inputs: never invents shares, labels assumptions; saving scenarios, and privacy;
+  - comparison;
+  - analytics: allocation, value history with no invented EUR history, dividends TTM and yield on cost, FX conversion
+    only with stored rates;
+  - all-or-nothing CSV import, including the ambiguous-number rejection.
+- End-to-end on a headless iPhone 14 Pro: screener + preset + filter sheet, compare chart and table, DCF result /
+  inputs / sensitivity / save, and portfolio allocation (EUR total via ECB), value history, dividends, import sheet.
+  One bug found and fixed: the DCF form rounded small FCF values to 0.
+
+### Phase 4: honest limitations
+- **SEC frames were not reached from the build sandbox.** They are tested against the documented shape with
+  synthetic values. Run the screener download once on your machine.
+- Screener metrics are a simplified, calendar-aligned snapshot. For decisions, open the company page (full
+  fiscal-year statements with provenance).
+- DCF needs positive free cash flow to be meaningful (the app warns otherwise). Net cash ignores leases, pensions
+  and minority interests.
+- Value history is not a performance measure that adjusts for deposits (no time-weighted or money-weighted
+  return yet).
 
 ## Phase 3: what was delivered
 
@@ -302,10 +374,10 @@ If Ollama is not running, the app shows a clear "AI is unavailable" message and 
 
 ---
 
-## Next steps (Phase 4)
-1. Stock screener over stored SEC fundamentals (growth, margins, leverage, FCF), honest about coverage.
-2. DCF valuation tool: inputs from SEC data, every assumption user-editable and labelled, sensitivity table.
-3. Company comparison view (side-by-side statements and ratios, charts).
-4. Portfolio management: allocation charts, performance over time from stored closes, optional ECB FX conversion
-   (always labelled with the rate date).
-5. Dividend tracking: dividend calendar and income per year from recorded transactions.
+## Next steps (Phase 5)
+1. News: free RSS feeds (company press releases, SEC 8-K feed for watched companies), headlines + links only.
+2. Alerts: price-level alerts on stored closes, new SEC filings for watched companies, in-app notifications
+   (optional Web Push over HTTPS).
+3. Optional shared research between members (explicit opt-in per note).
+4. Scheduled jobs: daily SEC/ECB/price refresh and automatic backups (including PDFs).
+5. Remote access hardening checklist and a one-command Tailscale setup guide.

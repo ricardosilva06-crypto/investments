@@ -81,6 +81,8 @@ INCOME = [
          kind="per_share", additive=False),
     Item("shares_diluted", "Diluted shares (weighted)", _c("WeightedAverageNumberOfDilutedSharesOutstanding"),
          kind="shares", additive=False),
+    Item("dps", "Dividends declared per share", _c("CommonStockDividendsPerShareDeclared",
+         "CommonStockDividendsPerShareCashPaid"), kind="per_share", additive=False),
 ]
 
 BALANCE = [
@@ -96,6 +98,8 @@ BALANCE = [
     Item("accounts_payable", "Accounts payable", _c("AccountsPayableCurrent",
          "ifrs-full:TradeAndOtherCurrentPayables"), indent=1),
     Item("current_liabilities", "Current liabilities", _c("LiabilitiesCurrent", "ifrs-full:CurrentLiabilities")),
+    Item("short_term_debt", "Short-term debt", _c("LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings",
+         "ifrs-full:CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings"), indent=1),
     Item("long_term_debt", "Long-term debt", _c("LongTermDebtNoncurrent", "LongTermDebt",
          "ifrs-full:NoncurrentFinancialLiabilities"), indent=1),
     Item("total_liabilities", "Total liabilities", _c("Liabilities", "ifrs-full:Liabilities")),
@@ -496,6 +500,7 @@ def build_metrics(facts: list[FinancialFact], period: str = "annual") -> dict:
     ]
     if period == "annual":
         # Not shown for quarters: a quarterly ratio would need annualising (an assumption).
+        defs.append(("payout_ratio", "Dividend payout ratio", "percent", "Dividends paid ÷ Net income"))
         defs.insert(5, ("roe", "Return on equity", "percent", "Net income ÷ Shareholders' equity at fiscal year end"))
         defs.insert(0, ("revenue_growth", "Revenue growth (YoY)", "percent", "Revenue ÷ prior fiscal year revenue − 1"))
         defs.insert(1, ("eps_growth", "Diluted EPS growth (YoY)", "percent", "Diluted EPS ÷ prior fiscal year diluted EPS − 1"))
@@ -538,6 +543,10 @@ def build_metrics(facts: list[FinancialFact], period: str = "annual") -> dict:
             elif key == "roe" and bi is not None:
                 eq = _val(bal, "equity", bi)
                 v = div(_val(inc, "net_income", i), eq) if eq is not None and eq > 0 else None
+            elif key == "payout_ratio" and ci is not None:
+                ni = _val(inc, "net_income", i)
+                dp = _val(cf, "dividends_paid", ci)
+                v = div(dp, ni) if ni is not None and ni > 0 and dp is not None else None
             elif key == "current_ratio" and bi is not None:
                 v = div(_val(bal, "current_assets", bi), _val(bal, "current_liabilities", bi))
             elif key == "debt_to_equity" and bi is not None:

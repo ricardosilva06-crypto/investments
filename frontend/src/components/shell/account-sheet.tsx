@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, Database, FileText, FolderOpen, LogOut, Settings, Shield } from "lucide-react";
+import { ChevronRight, Database, FileText, FolderOpen, LogOut, Scale, Settings, Shield, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetClose, SheetContent } from "@/components/ui/sheet";
 import { Segmented } from "@/components/ui/segmented";
 import { useAuth, useTheme } from "@/components/providers";
@@ -9,6 +9,8 @@ import { api } from "@/lib/api";
 import type { Preferences } from "@/lib/types";
 
 const MENU = [
+  { href: "/screener", label: "Stock screener", icon: SlidersHorizontal, admin: false },
+  { href: "/compare", label: "Compare companies", icon: Scale, admin: false },
   { href: "/notes", label: "Notes & theses", icon: FileText, admin: false },
   { href: "/documents", label: "Documents (PDF)", icon: FolderOpen, admin: false },
   { href: "/sources", label: "Data sources", icon: Database, admin: false },
