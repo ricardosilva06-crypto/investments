@@ -103,6 +103,8 @@ class DocumentOut(ORM):
     size_bytes: int
     pages: int
     chars: int
+    ocr_pages: int = 0
+    ocr_language: str = ""
     status: str
     message: str
     embed_model: str
@@ -131,6 +133,15 @@ def _embed_model_for(db: Session, user: User) -> str | None:
         return None
 
 
+@router.get("/documents/ocr-status")
+def ocr_status(_: User = Depends(get_current_user)):
+    from ..services import ocr
+
+    st = ocr.status()
+    return {"available": st.available, "reason": st.reason, "languages": st.languages, "default": st.default_language,
+            "max_pages": get_settings().ocr_max_pages}
+
+
 @router.get("/documents", response_model=list[DocumentOut])
 def list_documents(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return [_doc_out(d) for d in db.scalars(select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc()))]
@@ -142,6 +153,7 @@ async def upload_document(
     file: UploadFile = File(...),
     title: str = Form("", max_length=255),
     ticker: str = Form("", max_length=20),
+    ocr_language: str = Form("", max_length=64),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -154,11 +166,16 @@ async def upload_document(
             raise HTTPException(404, "Unknown ticker")
         sec_id = sec.id
     try:
-        doc = docsvc.store_upload(db, user.id, file.filename or "document.pdf", data, title.strip(), sec_id)
+        doc = docsvc.store_upload(db, user.id, file.filename or "document.pdf", data, title.strip(), sec_id,
+                                  ocr_language=ocr_language.strip() or None)
     except docsvc.DocumentError as exc:
         db.rollback()
         raise HTTPException(422, str(exc))
-    background.add_task(docsvc.index_document, doc.id, _embed_model_for(db, user))
+    todo = getattr(doc, "_ocr_pages_todo", [])
+    if todo:
+        background.add_task(docsvc.ocr_document, doc.id, todo, _embed_model_for(db, user))
+    else:
+        background.add_task(docsvc.index_document, doc.id, _embed_model_for(db, user))
     db.refresh(doc)
     return _doc_out(doc)
 

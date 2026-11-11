@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     max_upload_mb: int = 25
     max_pdf_pages: int = 600
 
+    # OCR for scanned PDFs (local Tesseract). "auto" = use it when installed, "off" = never.
+    ocr: str = "auto"
+    ocr_languages: str = "eng"  # Tesseract codes joined by '+', e.g. "eng+por+deu+fra"
+    ocr_dpi: int = 300
+    ocr_max_pages: int = 300
+
     # Optional end-of-day price provider (Tiingo free plan; personal/internal use).
     # Leave empty to rely on CSV imports only. Budget stays below Tiingo's free limits.
     tiingo_api_key: str = ""

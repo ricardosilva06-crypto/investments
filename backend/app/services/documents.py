@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -87,19 +87,50 @@ def chunk_pages(pages: list[str]) -> list[tuple[int, str]]:
     return chunks
 
 
-def store_upload(db: Session, user_id: int, filename: str, data: bytes, title: str, security_id: int | None) -> Document:
+def _add_chunks(db: Session, doc_id: int, chunks: list[tuple[int, str]], start_seq: int, ocr: bool) -> int:
+    ensure_fts(db)
+    for seq, (page, body) in enumerate(chunks, start=start_seq):
+        ch = DocumentChunk(document_id=doc_id, seq=seq, page=page, text=body, ocr=ocr)
+        db.add(ch)
+        db.flush()
+        db.execute(text("INSERT INTO chunk_fts(rowid, body) VALUES (:id, :b)"), {"id": ch.id, "b": body})
+    return start_seq + len(chunks)
+
+
+def store_upload(db: Session, user_id: int, filename: str, data: bytes, title: str, security_id: int | None,
+                 ocr_language: str | None = None) -> Document:
+    """Store a PDF and index its text layer. Scanned pages are queued for OCR (see ``ocr_document``)."""
+    from . import ocr
+
     s = get_settings()
     if len(data) > s.max_upload_mb * 1024 * 1024:
         raise DocumentError(f"File is larger than {s.max_upload_mb} MB.")
     if not data.startswith(b"%PDF"):
         raise DocumentError("Only PDF files are supported.")
     pages = extract_pages(data, s.max_pdf_pages)
-    chunks = chunk_pages(pages)
+    scanned = ocr.pages_needing_ocr(data)
+    # Text-layer pages are indexed now; scanned pages only through OCR.
+    text_pages = [("" if i in set(scanned) else t) for i, t in enumerate(pages)]
+    chunks = chunk_pages(text_pages)
     total_chars = sum(len(c) for _, c in chunks)
-    if total_chars < 200:
-        raise DocumentError(
-            "No extractable text found. This looks like a scanned PDF; OCR is not supported (no external service is used)."
-        )
+    st = ocr.status()
+    if scanned and not st.available:
+        if total_chars < 200:
+            raise DocumentError(
+                "No extractable text found: this looks like a scanned PDF. OCR is not available on the server "
+                f"({st.reason}) Install the free Tesseract OCR engine to read scanned PDFs (see README)."
+            )
+        scanned = []  # index the text pages only; the document message explains what was skipped
+    if scanned and len(scanned) > s.ocr_max_pages:
+        raise DocumentError(f"{len(scanned)} scanned pages exceed the OCR limit of {s.ocr_max_pages} pages (II_OCR_MAX_PAGES).")
+    lang = ""
+    if scanned:
+        try:
+            lang = ocr.normalise_languages(ocr_language)
+        except ValueError as exc:
+            raise DocumentError(str(exc)) from exc
+    if not scanned and total_chars < 200:
+        raise DocumentError("No extractable text found in this PDF (no text layer and no scanned images).")
     folder = s.documents_dir / str(user_id)
     folder.mkdir(parents=True, exist_ok=True)
     stored = f"{uuid.uuid4().hex}.pdf"
@@ -114,18 +145,57 @@ def store_upload(db: Session, user_id: int, filename: str, data: bytes, title: s
         sha256=hashlib.sha256(data).hexdigest(),
         pages=len(pages),
         chars=total_chars,
-        status="extracted",
+        status="ocr" if scanned else "extracted",
+        message=f"Waiting to read {len(scanned)} scanned page(s) with OCR…" if scanned else "",
+        ocr_language=lang,
     )
+    if not scanned and ocr.pages_needing_ocr(data) and not st.available:
+        doc.message = "Some pages look scanned and were skipped: OCR is not installed on the server."
     db.add(doc)
     db.flush()
-    ensure_fts(db)
-    for seq, (page, body) in enumerate(chunks):
-        ch = DocumentChunk(document_id=doc.id, seq=seq, page=page, text=body)
-        db.add(ch)
-        db.flush()
-        db.execute(text("INSERT INTO chunk_fts(rowid, body) VALUES (:id, :b)"), {"id": ch.id, "b": body})
+    _add_chunks(db, doc.id, chunks, 0, ocr=False)
     db.commit()
+    doc._ocr_pages_todo = scanned  # transient: picked up by the caller's background task
     return doc
+
+
+def ocr_document(document_id: int, pages: list[int], embed_model: str | None) -> None:
+    """Background: OCR scanned pages, add their text to the index, then build embeddings."""
+    from . import ocr
+
+    db = session_factory()()
+    try:
+        doc = db.get(Document, document_id)
+        if doc is None or not pages:
+            return
+
+        def progress(done: int, total: int) -> None:
+            doc.message = f"Reading scanned pages with OCR: {done}/{total}"
+            db.commit()
+
+        try:
+            texts = ocr.ocr_pages(file_path(doc), pages, doc.ocr_language or get_settings().ocr_languages, progress)
+        except Exception as exc:  # Tesseract missing at runtime, damaged page, ...
+            doc.status, doc.message = "error", f"OCR failed: {exc}"[:500]
+            db.commit()
+            return
+        page_texts = [""] * doc.pages
+        for i, t in texts.items():
+            page_texts[i] = t
+        chunks = chunk_pages(page_texts)
+        next_seq = (db.scalar(select(func.max(DocumentChunk.seq)).where(DocumentChunk.document_id == doc.id)) or -1) + 1
+        _add_chunks(db, doc.id, chunks, next_seq, ocr=True)
+        doc.ocr_pages = sum(1 for t in texts.values() if t.strip())
+        doc.chars += sum(len(c) for _, c in chunks)
+        if doc.chars < 200:
+            doc.status, doc.message = "error", "OCR found no readable text. Check the scan quality or the OCR language."
+            db.commit()
+            return
+        doc.status, doc.message = "extracted", ""
+        db.commit()
+    finally:
+        db.close()
+    index_document(document_id, embed_model)
 
 
 def file_path(doc: Document) -> Path:
@@ -197,6 +267,7 @@ class Hit:
     page: int
     text: str
     score: float
+    ocr: bool = False
 
 
 def _fts_query(q: str) -> str:
@@ -261,11 +332,12 @@ def search(db: Session, docs: list[Document], query: str, k: int = 8, embed_mode
         first = db.scalars(
             select(DocumentChunk).where(DocumentChunk.document_id.in_(ids), DocumentChunk.seq < 3).order_by(DocumentChunk.seq)
         ).all()
-        return [Hit(c.id, c.document_id, titles[c.document_id], c.page, c.text, 0.0) for c in first][:k]
+        return [Hit(c.id, c.document_id, titles[c.document_id], c.page, c.text, 0.0, c.ocr) for c in first][:k]
 
     top = sorted(ranked.items(), key=lambda kv: kv[1], reverse=True)[:k]
     missing = [cid for cid, _ in top if cid not in rows]
     if missing:
         for c in db.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(missing))):
             rows[c.id] = c
-    return [Hit(cid, rows[cid].document_id, titles[rows[cid].document_id], rows[cid].page, rows[cid].text, score) for cid, score in top]
+    return [Hit(cid, rows[cid].document_id, titles[rows[cid].document_id], rows[cid].page, rows[cid].text, score, rows[cid].ocr)
+            for cid, score in top]

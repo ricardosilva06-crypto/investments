@@ -98,6 +98,9 @@ def reset_engine() -> None:
 ADDED_COLUMNS = [
     ("notes", "is_shared", "BOOLEAN NOT NULL DEFAULT 0"),
     ("securities", "lei", "VARCHAR(20)"),
+    ("documents", "ocr_pages", "INTEGER NOT NULL DEFAULT 0"),
+    ("documents", "ocr_language", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("document_chunks", "ocr", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 

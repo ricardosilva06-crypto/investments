@@ -294,8 +294,9 @@ def add_portfolio(ctx: Context, db: Session, user: User) -> None:
 def add_documents(ctx: Context, db: Session, docs: list[Document], query: str, embed_model: str | None, k: int) -> None:
     for hit in docsvc.search(db, docs, query, k=k, embed_model=embed_model):
         did = ctx.next_id("D")
-        ctx.blocks.append(f"[{did}] Document “{hit.title}”, page {hit.page}:\n{hit.text}")
-        ctx.sources.append(Source(did, "document", f"{hit.title} · p. {hit.page}", url=f"/api/documents/{hit.document_id}/file#page={hit.page}",
+        ocr_note = " (text recognised by OCR from a scanned page: numbers may contain recognition errors; say so when you use them)" if hit.ocr else ""
+        ctx.blocks.append(f"[{did}] Document “{hit.title}”, page {hit.page}{ocr_note}:\n{hit.text}")
+        ctx.sources.append(Source(did, "document", f"{hit.title} · p. {hit.page}{' (OCR)' if hit.ocr else ''}", url=f"/api/documents/{hit.document_id}/file#page={hit.page}",
                                   detail=hit.text[:300]))
         ctx.values += _numbers_in_text(hit.text)
 

@@ -249,7 +249,9 @@ export type DocItem = {
   size_bytes: number;
   pages: number;
   chars: number;
-  status: "extracted" | "indexing" | "ready" | "keyword_only" | "error";
+  status: "extracted" | "ocr" | "indexing" | "ready" | "keyword_only" | "error";
+  ocr_pages: number;
+  ocr_language: string;
   message: string;
   embed_model: string;
   created_at: string;

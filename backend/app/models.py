@@ -338,8 +338,10 @@ class Document(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     pages: Mapped[int] = mapped_column(Integer, default=0)
     chars: Mapped[int] = mapped_column(Integer, default=0)
-    # extracted | indexing | ready | keyword_only | error
+    # extracted | ocr | indexing | ready | keyword_only | error
     status: Mapped[str] = mapped_column(String(16), default="extracted")
+    ocr_pages: Mapped[int] = mapped_column(Integer, default=0)  # pages whose text came from OCR
+    ocr_language: Mapped[str] = mapped_column(String(64), default="")
     message: Mapped[str] = mapped_column(Text, default="")
     embed_model: Mapped[str] = mapped_column(String(128), default="")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -356,6 +358,7 @@ class DocumentChunk(Base):
     seq: Mapped[int] = mapped_column(Integer)
     page: Mapped[int] = mapped_column(Integer)  # 1-based page where the chunk starts
     text: Mapped[str] = mapped_column(Text)
+    ocr: Mapped[bool] = mapped_column(Boolean, default=False)  # text recognised by OCR (may contain errors)
     embedding: Mapped[bytes | None] = mapped_column(LargeBinary)  # float32 little-endian, L2-normalised
 
 
