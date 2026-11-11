@@ -97,6 +97,9 @@ def init_db() -> None:
     from . import models  # noqa: F401  (registers tables)
 
     Base.metadata.create_all(get_engine())
+    with get_engine().begin() as conn:
+        # Full-text index for document chunks (SQLite FTS5, local).
+        conn.exec_driver_sql("CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(body, tokenize='porter unicode61')")
 
 
 def session_factory() -> sessionmaker:

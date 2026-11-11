@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..db import get_db, utcnow
 from ..deps import get_current_user
-from ..models import DataSync, Note, Notification, Portfolio, Security, User, UserPreference, Watchlist, WatchlistItem
+from ..models import ChatMessage, Conversation, DataSync, Document, Note, Notification, Portfolio, Security, User, UserPreference, Watchlist, WatchlistItem
 from ..schemas import ORM, QuoteOut, SecurityOut
 from ..services.prices import latest_quotes
 from ..services import ai
@@ -244,6 +244,19 @@ def export_my_data(db: Session = Depends(get_db), user: User = Depends(get_curre
             {"title": n.title, "body": n.body, "ticker": n.security.ticker if n.security else None,
              "created_at": n.created_at.isoformat(), "updated_at": n.updated_at.isoformat()}
             for n in db.scalars(select(Note).where(Note.user_id == user.id))
+        ],
+        "ai_conversations": [
+            {"title": c.title, "created_at": c.created_at.isoformat(), "messages": [
+                {"role": m.role, "task": m.task, "content": m.content, "model": m.model, "tickers": m.tickers,
+                 "created_at": m.created_at.isoformat()}
+                for m in db.scalars(select(ChatMessage).where(ChatMessage.conversation_id == c.id).order_by(ChatMessage.id))
+            ]}
+            for c in db.scalars(select(Conversation).where(Conversation.user_id == user.id))
+        ],
+        "documents": [
+            {"title": d.title, "filename": d.filename, "pages": d.pages, "sha256": d.sha256, "uploaded_at": d.created_at.isoformat(),
+             "note": "PDF files are not embedded; download them from the Documents page."}
+            for d in db.scalars(select(Document).where(Document.user_id == user.id))
         ],
     }
     stamp = utcnow().strftime("%Y%m%d")

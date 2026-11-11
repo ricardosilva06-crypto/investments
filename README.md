@@ -5,7 +5,8 @@ and costs **€0** in mandatory subscriptions, hosting, APIs or AI fees.
 
 - **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS 4, shadcn/ui-style components (Radix UI), exported as static files.
 - **Backend:** Python FastAPI + SQLite (one file, easy to back up).
-- **AI (Phase 3):** Ollama with open-source models, running locally.
+- **AI:** Ollama with open-source models, running locally. Answers are grounded in the app's data and your PDFs,
+  with citations, and every number is checked against the sources.
 - **Data:** official, free sources first: SEC EDGAR (company list, XBRL financial statements, filings),
   ECB euro reference rates, and end-of-day prices via CSV import or the optional Tiingo free plan.
 - **Charts:** TradingView Lightweight Charts (prices) and Recharts (financials, FX).
@@ -57,6 +58,17 @@ Tests and checks:
 cd backend && .venv/bin/python -m pytest -q
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
+
+### Local AI analyst (optional, free)
+
+```bash
+# on the computer that runs the app — https://ollama.com (open source)
+ollama pull llama3.1:8b          # or qwen2.5:7b; bigger models are better if you have the RAM
+ollama pull nomic-embed-text     # optional: semantic search in your PDFs
+```
+
+The AI Analyst tab detects Ollama automatically (default `http://127.0.0.1:11434`). Without it, the app
+works normally and explains how to enable AI.
 
 ## 2. Inviting friends
 
@@ -112,6 +124,7 @@ A private network (Tailscale or WireGuard) avoids all of this, which is why it's
   in `backend/data/backups/` and lets you download it. The 14 most recent are kept.
 - CLI and cron: `cd backend && .venv/bin/python -m app.cli backup`
 - Each user can download their own data as JSON in **Settings → Export my data**.
+- Uploaded PDFs live in `backend/data/documents/`. Include that folder in your backups.
 - To restore, stop the server and copy a backup over `backend/data/investor.db`.
 
 ## 5. Project layout
@@ -121,7 +134,9 @@ backend/
   app/main.py            FastAPI app, CSRF + security headers, serves the static PWA
   app/models.py          SQLite schema (SQLAlchemy 2)
   app/routers/           auth, securities/search, companies (profile/financials/filings/prices/fx), watchlists, notes, portfolios, account, admin
-  app/services/          sec + sec_client (EDGAR), fundamentals (XBRL statements), prices (CSV/Tiingo), ecb (FX), portfolio ledger, backup, ai
+  app/services/          sec + sec_client (EDGAR), fundamentals (XBRL statements), prices (CSV/Tiingo), ecb (FX),
+                         llm (model abstraction, Ollama), documents (PDF + RAG), analyst (grounding + number check),
+                         portfolio ledger, backup
   app/cli.py             create-admin, create-invite, sync-sec, backup
   tests/                 pytest suite (auth, isolation, ledger, sync, backups)
 frontend/

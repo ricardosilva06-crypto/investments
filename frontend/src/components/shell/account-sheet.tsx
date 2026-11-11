@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, Database, FileText, LogOut, Settings, Shield } from "lucide-react";
+import { ChevronRight, Database, FileText, FolderOpen, LogOut, Settings, Shield } from "lucide-react";
 import { Sheet, SheetClose, SheetContent } from "@/components/ui/sheet";
 import { Segmented } from "@/components/ui/segmented";
 import { useAuth, useTheme } from "@/components/providers";
@@ -10,6 +10,7 @@ import type { Preferences } from "@/lib/types";
 
 const MENU = [
   { href: "/notes", label: "Notes & theses", icon: FileText, admin: false },
+  { href: "/documents", label: "Documents (PDF)", icon: FolderOpen, admin: false },
   { href: "/sources", label: "Data sources", icon: Database, admin: false },
   { href: "/settings", label: "Settings & security", icon: Settings, admin: false },
   { href: "/admin", label: "Administration", icon: Shield, admin: true },

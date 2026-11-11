@@ -7,7 +7,7 @@ and every query in the routers filters on the authenticated user's id.
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base, DecimalString, UTCDateTime, utcnow
@@ -305,3 +305,84 @@ class FxRate(Base):
     day: Mapped[date] = mapped_column(Date)
     value: Mapped[Decimal] = mapped_column(DecimalString)
     source: Mapped[str] = mapped_column(String(32), default="ecb_exr")
+
+
+# ----------------------------------------------------------------- Phase 3
+class AISettings(Base):
+    """Per-user model choice. Empty = server default (II_OLLAMA_CHAT_MODEL / first installed)."""
+
+    __tablename__ = "ai_settings"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    chat_model: Mapped[str] = mapped_column(String(128), default="")
+    embed_model: Mapped[str] = mapped_column(String(128), default="")
+    temperature: Mapped[Decimal] = mapped_column(DecimalString, default=Decimal("0.2"))
+
+
+class Document(Base):
+    """A private PDF uploaded by a user (annual report, earnings release...)."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    security_id: Mapped[int | None] = mapped_column(ForeignKey("securities.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(String(255))
+    filename: Mapped[str] = mapped_column(String(255))
+    stored_name: Mapped[str] = mapped_column(String(64))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    pages: Mapped[int] = mapped_column(Integer, default=0)
+    chars: Mapped[int] = mapped_column(Integer, default=0)
+    # extracted | indexing | ready | keyword_only | error
+    status: Mapped[str] = mapped_column(String(16), default="extracted")
+    message: Mapped[str] = mapped_column(Text, default="")
+    embed_model: Mapped[str] = mapped_column(String(128), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    security: Mapped[Security | None] = relationship()
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    __table_args__ = (Index("ix_chunks_doc", "document_id", "seq"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    seq: Mapped[int] = mapped_column(Integer)
+    page: Mapped[int] = mapped_column(Integer)  # 1-based page where the chunk starts
+    text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[bytes | None] = mapped_column(LargeBinary)  # float32 little-endian, L2-normalised
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.id"
+    )
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    content: Mapped[str] = mapped_column(Text)
+    task: Mapped[str] = mapped_column(String(32), default="ask")
+    tickers: Mapped[str] = mapped_column(String(64), default="")  # comma separated
+    document_ids: Mapped[str] = mapped_column(String(128), default="")
+    model: Mapped[str] = mapped_column(String(128), default="")
+    sources: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of cited sources
+    verification: Mapped[str] = mapped_column(Text, default="{}")  # JSON number check
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok | error | partial
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")

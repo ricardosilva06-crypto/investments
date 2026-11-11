@@ -6,3 +6,7 @@ pydantic>=2.9
 pydantic-settings>=2.6
 argon2-cffi>=25.1.0
 httpx>=0.28
+# Phase 3 (local AI analyst)
+python-multipart>=0.0.20  # Apache-2.0, file uploads
+numpy>=2.0                # BSD, vector similarity for local retrieval
+pymupdf>=1.24             # AGPL-3.0 (free for private self-hosting; see PROJECT_STATUS.md)

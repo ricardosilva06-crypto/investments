@@ -220,3 +220,48 @@ export type Fx = {
   last_success_at: string | null;
   note: string;
 };
+
+export type AIModel = { name: string; size_bytes: number | null; family: string; parameter_size: string; quantization: string; embedding: boolean };
+export type AIStatus = {
+  available: boolean;
+  message: string;
+  url: string;
+  models: AIModel[];
+  chat_model: string | null;
+  embed_model: string | null;
+  chosen_chat_model: string;
+  chosen_embed_model: string;
+  temperature: string;
+  num_ctx: number;
+  tasks: Record<string, string>;
+};
+export type DocItem = {
+  id: number;
+  title: string;
+  filename: string;
+  size_bytes: number;
+  pages: number;
+  chars: number;
+  status: "extracted" | "indexing" | "ready" | "keyword_only" | "error";
+  message: string;
+  embed_model: string;
+  created_at: string;
+  ticker: string | null;
+};
+export type AISource = { id: string; kind: string; label: string; url: string | null; detail: string };
+export type Verification = { checked?: number; unmatched_verified?: string[]; unmatched_other?: string[]; has_structure?: boolean };
+export type ChatMsg = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  task: string;
+  tickers: string[];
+  document_ids: number[];
+  model: string;
+  sources: AISource[];
+  verification: Verification;
+  status: string;
+  created_at: string;
+};
+export type ConversationSummary = { id: number; title: string; created_at: string; updated_at: string };
+export type ConversationDetail = ConversationSummary & { messages: ChatMsg[] };

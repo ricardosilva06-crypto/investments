@@ -33,8 +33,17 @@ class Settings(BaseSettings):
     # Built frontend (Next.js static export). Served by FastAPI if present.
     frontend_dist: Path = BACKEND_DIR.parent / "frontend" / "out"
 
-    # Local Ollama server (Phase 3). Only used for an availability check now.
+    # Local Ollama server (AI analyst). Nothing is sent to any paid/cloud AI.
     ollama_url: str = "http://127.0.0.1:11434"
+    # Defaults when a user has not picked a model. Empty = first installed model.
+    ollama_chat_model: str = ""
+    ollama_embed_model: str = ""  # e.g. nomic-embed-text; empty = keyword search only
+    ollama_num_ctx: int = 8192  # context window requested from the model
+    ollama_timeout_seconds: int = 300
+
+    # Uploaded PDFs
+    max_upload_mb: int = 25
+    max_pdf_pages: int = 600
 
     # Optional end-of-day price provider (Tiingo free plan; personal/internal use).
     # Leave empty to rely on CSV imports only. Budget stays below Tiingo's free limits.
@@ -48,6 +57,10 @@ class Settings(BaseSettings):
     @property
     def database_path(self) -> Path:
         return self.data_dir / "investor.db"
+
+    @property
+    def documents_dir(self) -> Path:
+        return self.data_dir / "documents"
 
     @property
     def backup_dir(self) -> Path:

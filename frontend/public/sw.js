@@ -8,12 +8,12 @@
  *   Never caches /api/auth/* mutations, exports or backups.
  * - Per-user API caches are deleted by the page on sign-in and sign-out.
  */
-const VERSION = "v1";
+const VERSION = "v3";
 const SHELL = `ii-shell-${VERSION}`;
 const STATIC = `ii-static-${VERSION}`;
 const API = `ii-api-${VERSION}`;
-const PRECACHE = ["/", "/login", "/markets", "/watchlist", "/analyst", "/portfolio", "/notes", "/company", "/settings", "/sources", "/manifest.webmanifest", "/icons/icon-192.png"];
-const API_NO_CACHE = [/^\/api\/me\/export/, /^\/api\/admin\/backups/, /^\/api\/auth\/sessions/, /^\/api\/system\/status/];
+const PRECACHE = ["/", "/login", "/markets", "/watchlist", "/analyst", "/portfolio", "/notes", "/company", "/settings", "/sources", "/documents", "/manifest.webmanifest", "/icons/icon-192.png"];
+const API_NO_CACHE = [/^\/api\/documents\/\d+\/file/, /^\/api\/ai\/status/, /^\/api\/me\/export/, /^\/api\/admin\/backups/, /^\/api\/auth\/sessions/, /^\/api\/system\/status/];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

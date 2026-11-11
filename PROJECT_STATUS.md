@@ -1,6 +1,6 @@
 # PROJECT STATUS: Investor Intelligence
 
-_Last updated: 2026-11-11 (Phase 2)_
+_Last updated: 2026-11-11 (Phase 3)_
 
 ## Summary
 
@@ -8,9 +8,83 @@ _Last updated: 2026-11-11 (Phase 2)_
 |---|---|---|
 | **1** | Mobile-first UI, PWA, bottom navigation, dashboard, search, SQLite, local authentication | ✅ **Done**: runs locally, tested |
 | **2** | Company profiles, financial statements, historical data, market watchlists, charts | ✅ **Done**: tested with fixtures; live sources still to confirm on your machine |
-| 3 | AI analyst (Ollama), PDF upload & analysis, research reports, bull/bear | ⏳ Next (Ollama status check already in place) |
-| 4 | Screener, DCF, comparison, portfolio management, dividends | Partly started (ledger, cost basis, realised P/L, dividends, market value at stored close) |
+| **3** | AI analyst (Ollama), PDF upload & analysis, research reports, bull/bear | ✅ **Done**: tested with a mocked Ollama; run with a real model on your machine |
+| 4 | Screener, DCF, comparison, portfolio management, dividends | ⏳ Next. Partly started (ledger, cost basis, realised P/L, dividends, market value at stored close) |
 | 5 | News, alerts, multi-user, backups, remote access | Partly started (invite-only multi-user, backups, export, remote-access guide) |
+
+## Phase 3: what was delivered
+
+**AI Analyst tab** (mobile chat):
+- Streaming answers from a **local Ollama model**, with conversation history and follow-up questions.
+  Follow-ups automatically reuse the previous turn's companies and documents.
+- Task templates: Ask · Company analysis · Bull & bear case · Earnings analysis · Financial statement
+  analysis · Valuation explained · Compare companies (2–3) · Investment thesis · Portfolio analysis ·
+  Document analysis. Shortcuts on every company page ("AI analysis", "Bull vs bear").
+- Context chips: pick up to 3 companies and any of your PDFs. Model settings sheet: chat model, embedding
+  model and temperature, per user.
+- **Save as thesis**: stores the answer in Notes, linked to the company, with model name, date, sources and
+  any unverified numbers in a footer.
+- When Ollama is not running, the tab shows exactly what to install. **Every other feature keeps working**
+  (tested).
+
+**Documents** (`/documents`, also in the profile menu): private PDF upload (≤ 25 MB, ≤ 600 pages). Text
+extraction with PyMuPDF on your server, chunking with page numbers, keyword index (SQLite FTS5/BM25), and
+semantic index (local Ollama embeddings, if an embedding model is installed). Retrieval merges both
+(reciprocal-rank fusion). Scanned PDFs without text are rejected with an explanation (no OCR service).
+
+**How answers stay grounded** (`backend/app/services/analyst.py`):
+1. The model receives **numbered sources** built by the app:
+   - `[S]` SEC profile;
+   - `[F]` SEC statements (annual, plus quarterly where relevant);
+   - `[C]` app-calculated ratios and multiples (P/E and market capitalisation only when a stored price exists);
+   - `[P]` stored end-of-day price with date;
+   - `[D]` PDF passages with page;
+   - `[N]` your own notes, labelled as opinion;
+   - `[H]` your holdings.
+
+   Missing data is stated explicitly (e.g. "No stored price… do not state a share price").
+2. A strict system prompt: use only the sources, cite them, never call prices real-time, and always use the
+   sections **Verified data / Calculations / Assumptions / Opinion**.
+3. **Number check after every answer:** each number in the answer is compared with the source values
+   (handling thousands separators, %, ×, million/billion). Numbers under "Verified data" that are not found
+   in the sources are flagged in yellow. New numbers in calculations, assumptions or opinion are listed
+   separately. The app also reports whether the model followed the required structure.
+4. Tap any citation chip to see exactly what the model was given (including the PDF passage).
+
+**Model abstraction:** `services/llm.py` defines an `LLMProvider` interface (`list_models`, `chat_stream`,
+`embed`). Ollama is the implementation; other local servers can be added without touching the rest.
+At most 2 generations run at once to protect the host machine.
+
+**Privacy:** conversations, documents and AI settings are per user. Other members get 404 for them (tested).
+PDFs are stored under `backend/data/documents/<user>/` and never leave your machine. The personal JSON export
+now includes AI conversations and the document list.
+
+**Verification performed**
+- `pytest`: **41 tests pass**, including 9 new Phase 3 tests:
+  - AI unavailable → clear 503 while the rest of the app works;
+  - model selection and fallback;
+  - PDF upload, page extraction, indexing, rejection of non-PDF and scanned files, deletion, and other users blocked;
+  - hybrid search finds the right page;
+  - grounded chat: sources sent, prompt rules, SSE stream, follow-up inheritance, saving a note with provenance;
+  - task validation and conversation isolation;
+  - missing price and financials stated in the prompt;
+  - portfolio context;
+  - unit handling in the number check.
+- End-to-end on a headless iPhone 14 Pro against a stand-in Ollama server: PDF upload and indexing, company →
+  AI analysis, streaming answer with sections, table and citations, the number-check panel, the sources sheet with
+  PDF passage, save as thesis, conversation history, and the AI-offline state.
+
+### Phase 3: honest limitations
+- **Not run against a real model in the build sandbox** (no Ollama or model download possible there). The
+  stand-in server only proves the plumbing. Answer quality depends on the model you install: 7–8B models
+  (llama3.1:8b, qwen2.5:7b) follow the section format reasonably well but can still make mistakes, which is why
+  the number check exists. Bigger models (14B+) are better if your hardware allows.
+- The number check confirms that a figure **appears** in the sources. It cannot confirm the figure is attributed
+  to the right line or year, and it cannot verify arithmetic. Always read the cited source for important decisions.
+- Local inference is slow on CPUs (tens of seconds per answer). The first request also loads the model into memory.
+- No OCR for scanned PDFs. Tables in PDFs are extracted as plain text, so complex tables may lose structure.
+- Backups: the SQLite backup does **not** include the PDF files in `backend/data/documents/`. Back up that
+  folder too.
 
 ## Phase 2: what was delivered
 
@@ -162,8 +236,11 @@ Optional integrations must say so and must degrade gracefully when absent. No pa
 | Playwright (dev only, optional) | Generating icons / e2e checks | Yes | No | No | No | Apache-2.0 |
 | TradingView Lightweight Charts | Price charts | Yes | No | No | No | Apache-2.0 (attribution logo kept on, as its licence requires) |
 | Recharts | Financial and FX charts | Yes | No | No | No | MIT |
-| **Planned:** Ollama + open models | Local AI (Phase 3) | Yes | No | Hardware only | No | MIT (Ollama); model licences vary (e.g. Llama community licence, Qwen Apache-2.0); check per model |
-| **Planned:** PyMuPDF | PDF parsing (Phase 3) | Yes | No | No | No | **AGPL-3.0** (free; fine for private self-hosting. A commercial licence is only needed for closed-source distribution). Alternative: `pypdf` (BSD) |
+| Ollama + open models | Local AI analyst | Yes | No | Hardware only | No | MIT (Ollama); model licences vary (e.g. Llama community licence, Qwen Apache-2.0); check per model |
+| PyMuPDF | PDF text extraction | Yes | No | No | No | **AGPL-3.0** (free; fine for private self-hosting of this unmodified-for-distribution app. A commercial licence is only needed for closed-source distribution). Alternative: `pypdf` (BSD) |
+| numpy | Vector similarity for document search | Yes | No | No | No | BSD |
+| python-multipart | File uploads | Yes | No | No | No | Apache-2.0 |
+| react-markdown + remark-gfm | Rendering AI answers (raw HTML disabled) | Yes | No | No | No | MIT |
 
 ### B. Infrastructure
 
@@ -211,7 +288,7 @@ Stooq remains disabled until its terms for programmatic use are clear.
 |---|---|---|---|---|---|---|
 | Inference | **Ollama**, local | Yes | No | Your CPU/GPU/RAM (≈8 GB RAM for 7–8B models) | No | No Claude/OpenAI key required |
 | Models | Llama 3.x, Qwen 2.5, Mistral, etc. | Yes | No | Hardware | No | Check each model's licence |
-| Embeddings / RAG | Ollama embedding model + SQLite (Phase 3) | Yes | No | Hardware | No | No external vector DB |
+| Embeddings / RAG | Ollama embedding model (e.g. nomic-embed-text) + SQLite FTS5 + numpy | Yes | No | Hardware | No | No external vector DB; keyword search works without any embedding model |
 
 If Ollama is not running, the app shows a clear "AI is unavailable" message and all non-AI features keep working.
 
@@ -225,9 +302,10 @@ If Ollama is not running, the app shows a clear "AI is unavailable" message and 
 
 ---
 
-## Next steps (Phase 3)
-1. Ollama model abstraction (choose any installed model), with streaming chat on the AI Analyst tab.
-2. Local RAG: PDF upload → PyMuPDF (or pypdf) text extraction → chunking → Ollama embeddings stored in SQLite.
-3. Grounding: answers pull financial facts from the database with citations, and label verified data, calculations,
-   assumptions and opinions separately.
-4. Research reports and bull/bear cases saved as investment theses (notes).
+## Next steps (Phase 4)
+1. Stock screener over stored SEC fundamentals (growth, margins, leverage, FCF), honest about coverage.
+2. DCF valuation tool: inputs from SEC data, every assumption user-editable and labelled, sensitivity table.
+3. Company comparison view (side-by-side statements and ratios, charts).
+4. Portfolio management: allocation charts, performance over time from stored closes, optional ECB FX conversion
+   (always labelled with the rate date).
+5. Dividend tracking: dividend calendar and income per year from recorded transactions.
