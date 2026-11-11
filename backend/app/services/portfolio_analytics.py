@@ -76,8 +76,21 @@ def allocation(db: Session, txs: list[Transaction], base: str | None) -> dict:
     return out
 
 
+def _flows(t: Transaction) -> tuple[Decimal, Decimal]:
+    """(money in, money out) of the holdings for one transaction. Dividends leave the holdings as cash."""
+    if t.kind == "buy":
+        return t.quantity * t.price + t.fees, Decimal(0)
+    if t.kind == "sell":
+        return Decimal(0), t.quantity * t.price - t.fees
+    return Decimal(0), t.price - t.fees  # dividend (net)
+
+
 def value_history(db: Session, txs: list[Transaction]) -> dict[str, list[dict]]:
-    """Per currency: daily [{date, value, cost}] where every held symbol has a recent close."""
+    """Per currency: daily [{date, value, cost, inflow, outflow}] where every held symbol has a recent close.
+
+    ``inflow``/``outflow`` are the cash flows of transactions applied on that day (a transaction on a day
+    without a stored close is applied on the next day that has one).
+    """
     if not txs:
         return {}
     by_ccy: dict[str, list[Transaction]] = defaultdict(list)
@@ -104,8 +117,11 @@ def value_history(db: Session, txs: list[Transaction]) -> dict[str, list[dict]]:
         holdings: dict[str, Decimal] = {}
         for d in days:
             changed = False
+            inflow = outflow = Decimal(0)
             while ti < len(group) and group[ti].trade_date <= d:
                 applied.append(group[ti])
+                fi, fo = _flows(group[ti])
+                inflow, outflow = inflow + fi, outflow + fo
                 ti += 1
                 changed = True
             if changed:
@@ -113,6 +129,10 @@ def value_history(db: Session, txs: list[Transaction]) -> dict[str, list[dict]]:
                 holdings = {p.symbol: p.quantity for p in led.positions.values() if p.quantity > 0}
                 cost = sum((p.cost_basis for p in led.positions.values()), Decimal(0))
             if not holdings:
+                if changed and series:
+                    # Everything was sold (or a dividend arrived after exiting): record the flow at value 0.
+                    series.append({"date": d, "value": Decimal("0.00"), "cost": cost.quantize(Decimal("0.01")),
+                                   "inflow": inflow, "outflow": outflow})
                 continue  # nothing held yet (or a dividend-only record): no value to show
             for s in symbols:
                 lst = closes.get(s, [])
@@ -127,7 +147,7 @@ def value_history(db: Session, txs: list[Transaction]) -> dict[str, list[dict]]:
                     break
                 value += qty * lc[1]
             series.append({"date": d, "value": value.quantize(Decimal("0.01")) if complete else None,
-                           "cost": cost.quantize(Decimal("0.01"))})
+                           "cost": cost.quantize(Decimal("0.01")), "inflow": inflow, "outflow": outflow})
         if any(p["value"] is not None for p in series):
             out[ccy] = series
     return out
@@ -167,3 +187,115 @@ def dividends(txs: list[Transaction], today: date | None = None) -> dict:
         "by_symbol": sorted(by_symbol.values(), key=lambda s: (s["currency"], -s["total"])),
         "note": "From dividend transactions you recorded (net of withholding/fees). Upcoming dividends are not shown: no free official source provides them.",
     }
+
+
+# ------------------------------------------------------------------ returns
+def time_weighted(series: list[dict]) -> dict:
+    """Daily-linked time-weighted return (TWR) from a value series with cash flows.
+
+    Flows are assumed at the end of the day (GIPS-style daily valuation):
+        r_t = (V_t − in_t + out_t) / V_{t−1} − 1
+    When nothing was held the day before (V_{t−1} = 0), money comes in at the start of the day:
+        r_t = (V_t + out_t) / in_t − 1
+    Days without a complete valuation are skipped; their flows carry to the next valued day, so the
+    chain stays correct across gaps (the gap count is reported).
+    """
+    growth = Decimal(1)
+    prev: Decimal | None = None
+    pend_in = pend_out = Decimal(0)
+    gaps = 0
+    points: list[dict] = []
+    start = None
+    for p in series:
+        pend_in += p["inflow"]
+        pend_out += p["outflow"]
+        v = p["value"]
+        if v is None:
+            gaps += 1
+            continue
+        if prev is not None and prev > 0:
+            r = (v - pend_in + pend_out) / prev - 1
+        elif pend_in > 0:
+            r = (v + pend_out) / pend_in - 1
+        else:
+            r = None  # no exposure this day
+        if r is not None:
+            growth *= 1 + r
+            if start is None:
+                start = p["date"]
+        points.append({"date": p["date"], "twr": growth - 1})
+        prev, pend_in, pend_out = v, Decimal(0), Decimal(0)
+    return {"start": start, "points": points, "total": growth - 1 if start else None, "gaps": gaps}
+
+
+def _period(points: list[dict], since: date) -> Decimal | None:
+    """TWR between the last point before ``since`` and the latest point."""
+    if not points or points[-1]["date"] < since:
+        return None
+    base = next((p for p in reversed(points) if p["date"] < since), None)
+    end = 1 + points[-1]["twr"]
+    if base is None:
+        return None  # history does not reach back to the start of the period
+    return end / (1 + base["twr"]) - 1
+
+
+def xirr(flows: list[tuple[date, Decimal]]) -> Decimal | None:
+    """Money-weighted return: annual rate r with Σ cf_i / (1+r)^(days_i/365) = 0 (bisection)."""
+    if not flows or not any(cf > 0 for _, cf in flows) or not any(cf < 0 for _, cf in flows):
+        return None
+    d0 = min(d for d, _ in flows)
+    cfs = [(float(cf), (d - d0).days / 365.0) for d, cf in flows]
+    if max(t for _, t in cfs) <= 0:
+        return None
+
+    def npv(r: float) -> float:
+        return sum(cf / (1 + r) ** t for cf, t in cfs)
+
+    lo, hi = -0.9999, 10.0
+    f_lo, f_hi = npv(lo), npv(hi)
+    if f_lo * f_hi > 0:
+        return None  # no unique solution in a sensible range
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        f_mid = npv(mid)
+        if abs(f_mid) < 1e-9:
+            break
+        if f_lo * f_mid < 0:
+            hi, f_hi = mid, f_mid
+        else:
+            lo, f_lo = mid, f_mid
+    return Decimal(str(round((lo + hi) / 2, 8)))
+
+
+def returns(db: Session, txs: list[Transaction], today: date | None = None) -> dict[str, dict]:
+    """Per currency: TWR (total, annualised, YTD, 1Y), money-weighted XIRR and a cumulative TWR series."""
+    today = today or date.today()
+    out: dict[str, dict] = {}
+    for ccy, series in value_history(db, txs).items():
+        tw = time_weighted(series)
+        if tw["start"] is None:
+            continue
+        pts = tw["points"]
+        end = pts[-1]["date"]
+        days = (end - tw["start"]).days
+        total = tw["total"]
+        annual = (Decimal(str(float(1 + total) ** (365 / days))) - 1) if days >= 365 and total > -1 else None
+        last_value = next((p["value"] for p in reversed(series) if p["value"] is not None), None)
+        # XIRR on actual trade dates; the final value counts as if sold at the last valued close.
+        flows = [(t.trade_date, -_flows(t)[0] + _flows(t)[1]) for t in txs if t.currency.upper() == ccy and t.trade_date <= end]
+        flows = [(d, cf) for d, cf in flows if cf != 0]
+        if last_value:
+            flows.append((end, last_value))
+        out[ccy] = {
+            "start": tw["start"],
+            "end": end,
+            "days": days,
+            "twr_total": total,
+            "twr_annualised": annual,
+            "twr_ytd": _period(pts, date(end.year, 1, 1)),
+            "twr_1y": _period(pts, end - timedelta(days=365)),
+            "mwr_annualised": xirr(flows),
+            "gaps": tw["gaps"],
+            "series": [{"date": p["date"], "twr": p["twr"].quantize(Decimal("0.000001"))} for p in pts],
+        }
+    return out

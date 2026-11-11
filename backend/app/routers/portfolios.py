@@ -302,6 +302,14 @@ def analytics(
     return fmt({
         "allocation": alloc,
         "history": pa.value_history(db, txs),
+        "returns": pa.returns(db, txs),
+        "returns_note": (
+            "Time-weighted return (TWR) measures how the investments performed, removing the effect of when you "
+            "added or withdrew money; it is linked daily from stored end-of-day closes, with trades valued at their "
+            "transaction prices and dividends counted as income. Money-weighted return (XIRR) is your own annualised "
+            "return including the timing of your deposits. Per currency, no FX conversion. Days without a complete "
+            "valuation are skipped, not estimated."
+        ),
         "dividends": pa.dividends(txs),
         "history_note": "Daily value from stored end-of-day closes. Days where any held symbol lacks a close within 7 days are left empty.",
     })

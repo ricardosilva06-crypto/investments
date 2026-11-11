@@ -340,6 +340,22 @@ export type Analytics = {
     note: string;
   };
   history_note: string;
+  returns: Record<
+    string,
+    {
+      start: string;
+      end: string;
+      days: number;
+      twr_total: string | null;
+      twr_annualised: string | null;
+      twr_ytd: string | null;
+      twr_1y: string | null;
+      mwr_annualised: string | null;
+      gaps: number;
+      series: { date: string; twr: string }[];
+    }
+  >;
+  returns_note: string;
 };
 
 export type NewsEntry = { type: "news" | "filing"; title: string; link: string; summary: string; source: string; ticker: string | null; date: string; date_is_published: boolean };

@@ -5,12 +5,14 @@ import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Segmented } from "@/components/ui/segmented";
 import { ErrorNote, SourceLine } from "@/components/page";
 import { fmtDate, fmtMoney, fmtPct, signClass } from "@/lib/format";
 import type { Analytics } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ValueHistory = dynamic(() => import("@/components/charts/value-history"), { ssr: false, loading: () => <Skeleton className="h-52" /> });
+const TwrChart = dynamic(() => import("@/components/charts/twr-chart"), { ssr: false, loading: () => <Skeleton className="h-52" /> });
 const FinancialBars = dynamic(() => import("@/components/charts/financial-bars"), { ssr: false, loading: () => <Skeleton className="h-44" /> });
 
 export function useAnalytics(pid: number, base: string | undefined) {
@@ -75,8 +77,34 @@ export function AllocationView({ pid, base }: { pid: number; base?: string }) {
   );
 }
 
+function Stat({ label, value, hint }: { label: string; value: string | null; hint?: string }) {
+  return (
+    <div className="rounded-xl bg-elevated px-3 py-2">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className={cn("num text-[16px] font-semibold", value === null ? "text-muted-foreground" : signClass(value))}>{value === null ? "—" : fmtPct(value, 1)}</p>
+      {hint && <p className="text-[10.5px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function ReturnsBlock({ r }: { r: Analytics["returns"][string] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <Stat label="Time-weighted, since start" value={r.twr_total} hint={`${fmtDate(r.start)} → ${fmtDate(r.end)}`} />
+        <Stat label="Time-weighted, per year" value={r.twr_annualised} hint={r.twr_annualised === null ? "needs ≥ 1 year of history" : "annualised"} />
+        <Stat label="Year to date (TWR)" value={r.twr_ytd} />
+        <Stat label="Last 12 months (TWR)" value={r.twr_1y} hint={r.twr_1y === null ? "history < 1 year" : undefined} />
+      </div>
+      <Stat label="Money-weighted (XIRR), per year" value={r.mwr_annualised} hint="your return including when you added money" />
+      {r.gaps > 0 && <p className="text-[11px] text-warning">{r.gaps} day(s) without a complete valuation were skipped (not estimated).</p>}
+    </div>
+  );
+}
+
 export function PerformanceView({ pid }: { pid: number }) {
   const { data, error } = useAnalytics(pid, undefined);
+  const [mode, setMode] = React.useState<"return" | "value">("return");
   if (error) return <ErrorNote error={error} />;
   if (!data) return <Skeleton className="h-56" />;
   const entries = Object.entries(data.history);
@@ -92,8 +120,20 @@ export function PerformanceView({ pid }: { pid: number }) {
         const valued = pts.filter((p) => p.value !== null);
         const last = valued[valued.length - 1];
         const gain = last ? Number(last.value) - Number(last.cost) : null;
+        const ret = data.returns?.[ccy];
         return (
           <div key={ccy} className="rounded-2xl border border-border/60 bg-card p-3">
+            {ret && (
+              <Segmented
+                className="mb-2"
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: "return", label: "Return (TWR)" },
+                  { value: "value", label: "Value vs cost" },
+                ]}
+              />
+            )}
             <div className="mb-1 flex items-baseline justify-between">
               <p className="font-semibold">{ccy} holdings</p>
               {last && (
@@ -106,12 +146,19 @@ export function PerformanceView({ pid }: { pid: number }) {
                 </p>
               )}
             </div>
-            <ValueHistory points={pts.map((p) => ({ date: p.date, value: p.value === null ? null : Number(p.value), cost: Number(p.cost) }))} currency={ccy} />
+            {ret && mode === "return" ? (
+              <>
+                <TwrChart points={ret.series.map((p) => ({ date: p.date, twr: Number(p.twr) }))} />
+                <ReturnsBlock r={ret} />
+              </>
+            ) : (
+              <ValueHistory points={pts.map((p) => ({ date: p.date, value: p.value === null ? null : Number(p.value), cost: Number(p.cost) }))} currency={ccy} />
+            )}
             {last && <p className="text-[11px] text-muted-foreground">Latest valued day {fmtDate(last.date)} · unrealised vs current cost basis</p>}
           </div>
         );
       })}
-      <SourceLine>{data.history_note} Not a time-weighted return: deposits (new buys) raise the value too.</SourceLine>
+      <SourceLine>{data.returns_note} {data.history_note}</SourceLine>
     </div>
   );
 }
