@@ -1,30 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import useSWR, { SWRConfig, useSWRConfig } from "swr";
-import { ApiError, api, clearOfflineCache, fetcher } from "@/lib/api";
-import type { Preferences, User } from "@/lib/types";
+import { SWRConfig } from "swr";
+import { api, fetcher } from "@/lib/api";
+import { withBase } from "@/lib/base";
+import type { Preferences } from "@/lib/types";
 
 type Theme = Preferences["theme"];
 const THEME_KEY = "ii-theme";
 
-type AuthCtx = {
-  user: User | null | undefined; // undefined = loading, null = signed out
-  unreachable: boolean; // server could not be reached and nothing is cached
-  refresh: () => Promise<unknown>;
-  logout: () => Promise<void>;
-};
-const AuthContext = React.createContext<AuthCtx | null>(null);
-
 type ThemeCtx = { theme: Theme; setTheme: (t: Theme) => void };
 const ThemeContext = React.createContext<ThemeCtx | null>(null);
-
-export function useAuth() {
-  const c = React.useContext(AuthContext);
-  if (!c) throw new Error("useAuth outside provider");
-  return c;
-}
 
 export function useTheme() {
   const c = React.useContext(ThemeContext);
@@ -48,8 +34,8 @@ function readStoredTheme(): Theme {
 }
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Theme is only rendered inside client-only UI (sheets/settings), so reading
-  // localStorage during the first client render cannot cause a hydration mismatch.
+  // localStorage mirrors the theme so it applies before first paint (see layout.tsx);
+  // the saved preference in on-device storage (part of backups) is the source of truth.
   const [theme, setThemeState] = React.useState<Theme>(() => (typeof window === "undefined" ? "dark" : readStoredTheme()));
 
   React.useEffect(() => {
@@ -68,63 +54,29 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
-}
-
-function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { data, error, mutate } = useSWR<User>("/api/auth/me", fetcher, {
-    shouldRetryOnError: false,
-    revalidateOnFocus: true,
-  });
-  const signedOut = error instanceof ApiError && error.status === 401;
-  const unreachable = !!error && !signedOut && !data;
-  const user = signedOut ? null : data;
-  const { setTheme } = useTheme();
-  const router = useRouter();
-  const { mutate: globalMutate } = useSWRConfig();
-
-  // Sync the theme with the server-side preference once signed in.
   React.useEffect(() => {
-    if (!data) return;
     api<Preferences>("/api/preferences")
       .then((p) => setTheme(p.theme))
       .catch(() => {});
-  }, [data, setTheme]);
+  }, [setTheme]);
 
-  const logout = React.useCallback(async () => {
-    try {
-      await api("/api/auth/logout", { method: "POST" });
-    } catch {}
-    await clearOfflineCache();
-    // Forget every cached response in memory, then re-check the session.
-    await globalMutate(() => true, undefined, { revalidate: false });
-    await mutate();
-    router.replace("/login");
-  }, [mutate, globalMutate, router]);
-
-  return (
-    <AuthContext.Provider value={{ user, unreachable, refresh: () => mutate(), logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }
 
 function ServiceWorker() {
   React.useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => {});
+    navigator.serviceWorker.register(withBase("/sw.js"), { scope: withBase("/"), updateViaCache: "none" }).catch(() => {});
   }, []);
   return null;
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SWRConfig value={{ fetcher, keepPreviousData: true, errorRetryCount: 2 }}>
+    <SWRConfig value={{ fetcher, keepPreviousData: true, errorRetryCount: 1, revalidateOnFocus: false }}>
       <ThemeProvider>
-        <AuthProvider>
-          <ServiceWorker />
-          {children}
-        </AuthProvider>
+        <ServiceWorker />
+        {children}
       </ThemeProvider>
     </SWRConfig>
   );

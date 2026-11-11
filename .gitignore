@@ -1,11 +1,3 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-.pytest_cache/
-backend/.env
-backend/data/
-
 # Node / Next.js
 node_modules/
 frontend/.next/

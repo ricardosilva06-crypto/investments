@@ -37,7 +37,7 @@ export function AllocationView({ pid, base }: { pid: number; base?: string }) {
             <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Total in {a.base.currency}</p>
             <p className="num text-[26px] font-bold">{fmtMoney(a.base.total, a.base.currency)}</p>
             <p className="text-[12px] text-muted-foreground">
-              Converted at ECB reference rates of {fmtDate(a.base.rate_date)}. {a.base.includes_cost_basis && "Includes cost basis for positions without a stored price."}
+              Converted at your stored exchange rates (oldest from {fmtDate(a.base.rate_date)}). {a.base.includes_cost_basis && "Includes cost basis for positions without an imported price."}
             </p>
           </div>
         ))}
@@ -72,7 +72,7 @@ export function AllocationView({ pid, base }: { pid: number; base?: string }) {
           </div>
         );
       })}
-      <SourceLine>Weights use market value at the latest stored close where available, otherwise cost basis (lighter bar).</SourceLine>
+      <SourceLine>Weights use market value at the latest imported close where available, otherwise cost basis (lighter bar).</SourceLine>
     </div>
   );
 }
@@ -111,7 +111,7 @@ export function PerformanceView({ pid }: { pid: number }) {
   if (entries.length === 0)
     return (
       <p className="rounded-2xl border border-dashed border-border p-4 text-center text-[13px] text-muted-foreground">
-        No value history yet. It needs stored end-of-day prices for the symbols you hold (import them in Administration).
+        No value history yet. It needs stored end-of-day prices for the symbols you hold (import them in Menu → Prices & exchange rates).
       </p>
     );
   return (

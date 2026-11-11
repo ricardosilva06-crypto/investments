@@ -21,7 +21,7 @@ export default function LineMini({ points, digits = 4 }: { points: { date: strin
               ) : null
             }
           />
-          <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} isAnimationActive={false} />
+          <Line type="linear" dataKey="value" stroke="var(--primary)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

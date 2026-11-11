@@ -15,7 +15,7 @@ export function TickerAvatar({ ticker }: { ticker: string }) {
 export function SecurityRow({ security, right, sub, quote }: { security: Security; right?: React.ReactNode; sub?: React.ReactNode; quote?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 px-3.5 py-3">
-      <Link href={`/company?t=${encodeURIComponent(security.ticker)}`} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70">
+      <Link href={`/prices?t=${encodeURIComponent(security.ticker)}`} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70">
         <TickerAvatar ticker={security.ticker} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">

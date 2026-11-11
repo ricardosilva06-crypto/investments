@@ -6,12 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Eye, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/input";
+import { Field, Input, Textarea } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorNote, PageHeader, SourceLine } from "@/components/page";
 import { QuoteCell, SecurityRow } from "@/components/security-row";
-import { useShell } from "@/components/shell/app-shell";
 import { api } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import type { WatchItem, Watchlist } from "@/lib/types";
@@ -20,7 +19,6 @@ import { cn } from "@/lib/utils";
 export default function WatchlistPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const { openSearch } = useShell();
   const { data, error, mutate } = useSWR<Watchlist[]>("/api/watchlists");
   const selectedId = Number(params.get("id")) || data?.[0]?.id;
   const current = data?.find((w) => w.id === selectedId) ?? data?.[0];
@@ -30,6 +28,14 @@ export default function WatchlistPage() {
   const [item, setItem] = React.useState<WatchItem | null>(null);
   const [note, setNote] = React.useState("");
   const [opError, setOpError] = React.useState<unknown>(null);
+  const [adding, setAdding] = React.useState(false);
+  const [newSec, setNewSec] = React.useState({ ticker: "", name: "" });
+
+  function openAdd() {
+    setOpError(null);
+    setNewSec({ ticker: "", name: "" });
+    setAdding(true);
+  }
 
   function select(id: number) {
     router.replace(`/watchlist?id=${id}`, { scroll: false });
@@ -52,7 +58,7 @@ export default function WatchlistPage() {
         title="Watchlist"
         subtitle={current ? `${current.items.length} securities` : undefined}
         action={
-          <Button variant="secondary" size="icon" onClick={openSearch} aria-label="Add security">
+          <Button variant="secondary" size="icon" onClick={openAdd} aria-label="Add security" disabled={!current}>
             <Plus className="size-5" />
           </Button>
         }
@@ -100,8 +106,8 @@ export default function WatchlistPage() {
             {current.items.length === 0 ? (
               <div className="p-4">
                 <EmptyState icon={Search} title="This watchlist is empty">
-                  <Button variant="secondary" size="sm" className="mt-2" onClick={openSearch}>
-                    <Search /> Find a company
+                  <Button variant="secondary" size="sm" className="mt-2" onClick={openAdd}>
+                    <Plus /> Add a security
                   </Button>
                 </EmptyState>
               </div>
@@ -133,7 +139,7 @@ export default function WatchlistPage() {
             )}
           </div>
           <div className="mt-3 flex justify-between">
-            <SourceLine>Last stored end-of-day close and change vs the previous stored close. Not real-time.</SourceLine>
+            <SourceLine>Last imported end-of-day close and change vs the previous one. Not real-time.</SourceLine>
             <Button
               variant="ghost"
               size="sm"
@@ -189,6 +195,41 @@ export default function WatchlistPage() {
         </SheetContent>
       </Sheet>
 
+      <Sheet open={adding} onOpenChange={setAdding}>
+        <SheetContent title="Add to watchlist" description={current?.name}>
+          <form
+            className="space-y-3 px-4 pb-6"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!current) return;
+              run(() => api(`/api/watchlists/${current.id}/items`, { method: "POST", json: newSec }), () => setAdding(false));
+            }}
+          >
+            <Field label="Ticker" htmlFor="wt">
+              <Input
+                id="wt"
+                value={newSec.ticker}
+                onChange={(e) => setNewSec({ ...newSec, ticker: e.target.value.toUpperCase() })}
+                placeholder="e.g. ASML.AS, NOVO-B.CO, AAPL"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                required
+                maxLength={20}
+                autoFocus
+              />
+            </Field>
+            <Field label="Name (optional)" htmlFor="wn">
+              <Input id="wn" value={newSec.name} onChange={(e) => setNewSec({ ...newSec, name: e.target.value })} placeholder="e.g. ASML Holding" maxLength={120} />
+            </Field>
+            <p className="text-[12px] text-muted-foreground">Use the same ticker as in your broker export so prices and holdings match.</p>
+            <ErrorNote error={opError} />
+            <Button type="submit" className="w-full">
+              Add
+            </Button>
+          </form>
+        </SheetContent>
+      </Sheet>
+
       <Sheet open={!!item} onOpenChange={(o) => !o && setItem(null)}>
         {item && current && (
           <SheetContent title={item.security.ticker} description={`${item.security.name} · added ${fmtDate(item.added_at)}`}>
@@ -203,7 +244,7 @@ export default function WatchlistPage() {
               <ErrorNote error={opError} />
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" variant="secondary" asChild>
-                  <Link href={`/company?t=${encodeURIComponent(item.security.ticker)}`}>Open company</Link>
+                  <Link href={`/prices?t=${encodeURIComponent(item.security.ticker)}`}>Prices</Link>
                 </Button>
                 <Button type="submit">Save note</Button>
               </div>

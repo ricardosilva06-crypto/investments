@@ -2,16 +2,14 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { Briefcase, ChevronRight, Database, Eye, FileText, Search, Sparkles } from "lucide-react";
+import { Briefcase, ChevronRight, Eye, FileText, HardDriveDownload, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorNote, SourceLine } from "@/components/page";
 import { QuoteCell, SecurityRow } from "@/components/security-row";
-import { useAuth } from "@/components/providers";
-import { useShell } from "@/components/shell/app-shell";
 import { fmtInt, fmtMoney, fmtRelative } from "@/lib/format";
-import type { Dashboard, NewsEntry, SystemStatus } from "@/lib/types";
+import type { Dashboard, Preferences } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 function greeting() {
   const h = new Date().getHours();
@@ -27,13 +25,31 @@ function Stat({ label, value, href }: { label: string; value: string; href: stri
   );
 }
 
+function BackupCard({ last, due }: { last: string | null; due: boolean }) {
+  return (
+    <Link
+      href="/settings#backup"
+      className={cn(
+        "mt-4 flex items-center gap-3 rounded-2xl px-4 py-3.5 ring-1 active:scale-[0.99]",
+        due ? "bg-warning/10 ring-warning/40" : "bg-card ring-border/60",
+      )}
+    >
+      {due ? <HardDriveDownload className="size-5 shrink-0 text-warning" /> : <ShieldCheck className="size-5 shrink-0 text-positive" />}
+      <span className="flex-1">
+        <span className="block font-semibold">{due ? "Back up your data" : "Data on this device"}</span>
+        <span className="block text-[13px] text-muted-foreground">
+          {last ? `Last backup ${fmtRelative(last)}.` : "No backup yet."} Everything is stored only in this browser on this phone.
+        </span>
+      </span>
+      <ChevronRight className="size-4 text-muted-foreground" />
+    </Link>
+  );
+}
+
 export default function HomePage() {
-  const { user } = useAuth();
-  const { openSearch } = useShell();
   const { data, error } = useSWR<Dashboard>("/api/dashboard");
-  const { data: status } = useSWR<SystemStatus>("/api/system/status", { refreshInterval: 120_000 });
-  const { data: news } = useSWR<{ items: NewsEntry[] }>("/api/news?scope=mine&limit=4");
-  const sec = data?.data_sources.find((s) => s.source === "sec_company_tickers_exchange");
+  const { data: prefs } = useSWR<Preferences>("/api/preferences");
+  const name = prefs?.display_name?.split(" ")[0];
 
   return (
     <div>
@@ -41,7 +57,8 @@ export default function HomePage() {
         {new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date())}
       </p>
       <h1 className="text-[28px] font-bold tracking-tight">
-        {greeting()}, {user?.display_name.split(" ")[0]}
+        {greeting()}
+        {name ? `, ${name}` : ""}
       </h1>
 
       <ErrorNote error={error} />
@@ -60,41 +77,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {data && data.securities_available === 0 && (
-        <Card className="mt-4 border-warning/40 bg-warning/5">
-          <CardContent className="pt-4">
-            <p className="font-semibold">Company list not loaded yet</p>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              Search and watchlists use the official SEC EDGAR company list.{" "}
-              {user?.role === "admin" ? (
-                <>
-                  Load it from{" "}
-                  <Link href="/admin" className="font-medium text-primary">
-                    Administration
-                  </Link>
-                  .
-                </>
-              ) : (
-                "Ask the administrator to sync it."
-              )}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      <button
-        onClick={openSearch}
-        className="mt-4 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 px-4 py-3.5 text-left ring-1 ring-primary/20 active:scale-[0.99]"
-      >
-        <Search className="size-5 text-primary" />
-        <span className="flex-1">
-          <span className="block font-semibold">Research a company</span>
-          <span className="block text-[13px] text-muted-foreground">
-            {data ? `${fmtInt(data.securities_available)} SEC-registered securities` : "Search by ticker or name"}
-          </span>
-        </span>
-        <ChevronRight className="size-4 text-muted-foreground" />
-      </button>
+      {data && <BackupCard last={data.last_backup_at} due={data.backup_due} />}
 
       <Card className="mt-4">
         <CardHeader>
@@ -106,7 +89,7 @@ export default function HomePage() {
         {data?.watch_items.length ? (
           <ul className="divide-y divide-border/60 pb-1">
             {data.watch_items.slice(0, 6).map((i) => (
-              <li key={`${i.watchlist_id}-${i.security.id}`}>
+              <li key={`${i.watchlist_id}-${i.security.ticker}`}>
                 <SecurityRow security={i.security} sub={i.note || i.security.name} quote={<QuoteCell quote={i.quote} />} />
               </li>
             ))}
@@ -114,11 +97,11 @@ export default function HomePage() {
         ) : (
           <CardContent className="flex items-center gap-3 text-[13px] text-muted-foreground">
             <Eye className="size-5 shrink-0" />
-            {data ? "Nothing on your watchlist yet. Search for a company and tap “Watch”." : <Skeleton className="h-10 w-full" />}
+            {data ? "Nothing on your watchlist yet. Open Watchlist and tap +." : <Skeleton className="h-10 w-full" />}
           </CardContent>
         )}
         <CardContent className="pt-0">
-          <SourceLine>End-of-day closes with their date. Never real-time.</SourceLine>
+          <SourceLine>End-of-day closes you imported, with their date. Never real-time.</SourceLine>
         </CardContent>
       </Card>
 
@@ -154,34 +137,11 @@ export default function HomePage() {
               ))}
             </ul>
           ) : (
-            <p className="text-[13px] text-muted-foreground">{data ? "No portfolio yet. Record your transactions to track cost basis." : ""}</p>
+            <p className="text-[13px] text-muted-foreground">{data ? "No portfolio yet. Record your transactions or import your broker's CSV." : ""}</p>
           )}
           <SourceLine>Amounts are cost basis calculated from your own transactions. Open a portfolio for market value.</SourceLine>
         </CardContent>
       </Card>
-
-      {!!news?.items.length && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>Latest for your companies</CardTitle>
-            <Link href="/news" className="text-[13px] font-medium text-primary">
-              News
-            </Link>
-          </CardHeader>
-          <ul className="divide-y divide-border/60 pb-1">
-            {news.items.map((n, i) => (
-              <li key={i}>
-                <a href={n.link || undefined} target="_blank" rel="noreferrer noopener" className="block px-4 py-2.5 active:bg-muted">
-                  <span className="block truncate text-[14px] font-medium">{n.title}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {n.source} · {fmtRelative(n.date)}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
 
       {!!data?.recent_notes.length && (
         <Card className="mt-4">
@@ -204,39 +164,6 @@ export default function HomePage() {
           </ul>
         </Card>
       )}
-
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>System</CardTitle>
-          <Link href="/sources" className="text-[13px] font-medium text-primary">
-            Details
-          </Link>
-        </CardHeader>
-        <CardContent className="space-y-2.5">
-          <div className="flex items-center gap-3">
-            <Database className="size-4 text-muted-foreground" />
-            <span className="flex-1 text-[14px]">SEC company list</span>
-            {sec?.status === "ok" ? (
-              <Badge variant="positive">Synced {fmtRelative(sec.last_success_at)}</Badge>
-            ) : sec?.status === "error" ? (
-              <Badge variant="negative">Sync failed</Badge>
-            ) : (
-              <Badge variant="muted">Not synced</Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Sparkles className="size-4 text-muted-foreground" />
-            <span className="flex-1 text-[14px]">Local AI (Ollama)</span>
-            {!status ? (
-              <Skeleton className="h-4 w-16" />
-            ) : status.ai.available ? (
-              <Badge variant="positive">{status.ai.models.length} models</Badge>
-            ) : (
-              <Badge variant="muted">Offline</Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
