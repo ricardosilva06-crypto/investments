@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user, require_admin
-from ..models import CompanyProfile, FinancialFact, Filing, Security, User
+from ..models import CompanyProfile, EsefFiling, FinancialFact, Filing, Security, User
 from ..schemas import QuoteOut, SecurityOut
 from ..services import alerts as alertsvc
 from ..services import ecb, fundamentals, prices
@@ -66,6 +66,14 @@ class KeyFigure(BaseModel):
     filed: str | None
 
 
+class EsefInfoOut(BaseModel):
+    lei: str
+    entity_name: str
+    reports: int
+    latest_period_end: date | None
+    sources: list[str]
+
+
 class CompanyOut(BaseModel):
     security: SecurityOut
     profile: ProfileOut | None
@@ -75,6 +83,7 @@ class CompanyOut(BaseModel):
     key_figures: list[KeyFigure]
     currency: str
     has_financials: bool
+    esef: EsefInfoOut | None = None
 
 
 def _freshness(db: Session, cik: int) -> list[FreshnessOut]:
@@ -88,10 +97,17 @@ def _freshness(db: Session, cik: int) -> list[FreshnessOut]:
     return out
 
 
-def _facts(db: Session, cik: int | None) -> list[FinancialFact]:
-    if not cik:
-        return []
-    return list(db.scalars(select(FinancialFact).where(FinancialFact.cik == cik)))
+def _facts(db: Session, s: Security) -> list:
+    return fundamentals.facts_for_security(db, s)
+
+
+def _esef_info(db: Session, s: Security) -> EsefInfoOut | None:
+    if not s.lei:
+        return None
+    filings = db.scalars(select(EsefFiling).where(EsefFiling.lei == s.lei).order_by(EsefFiling.period_end.desc())).all()
+    return EsefInfoOut(lei=s.lei, entity_name=filings[0].entity_name if filings else s.name, reports=len(filings),
+                       latest_period_end=filings[0].period_end if filings else None,
+                       sources=sorted({f.source for f in filings}))
 
 
 def _key_figures(facts: list[FinancialFact]) -> tuple[list[KeyFigure], str]:
@@ -152,7 +168,7 @@ def company(ticker: str, db: Session = Depends(get_db), _: User = Depends(get_cu
     if price_error:
         errors["prices"] = price_error
     alertsvc.evaluate(db, [s.ticker])
-    facts = _facts(db, s.cik)
+    facts = _facts(db, s)
     figures, ccy = _key_figures(facts)
     q = prices.latest_quotes(db, [s.ticker]).get(s.ticker)
     return CompanyOut(
@@ -164,6 +180,7 @@ def company(ticker: str, db: Session = Depends(get_db), _: User = Depends(get_cu
         key_figures=figures,
         currency=ccy,
         has_financials=bool(facts),
+        esef=_esef_info(db, s),
     )
 
 
@@ -187,7 +204,7 @@ def financials(
     _: User = Depends(get_current_user),
 ):
     s = get_security(db, ticker)
-    facts = _facts(db, s.cik)
+    facts = _facts(db, s)
     data = (
         fundamentals.build_metrics(facts, period)
         if statement == "metrics"
@@ -204,6 +221,18 @@ def financials(
             for c in r["values"]:
                 if c and c.get("accession"):
                     c["url"] = fundamentals.filing_url(s.cik, c["accession"])
+    elif s.lei:
+        filings = {f"ESEF-{f.id}": f for f in db.scalars(select(EsefFiling).where(EsefFiling.lei == s.lei))}
+        latest = max((f.imported_at for f in filings.values()), default=None)
+        data["source"] = {"name": "ESEF annual financial reports (inline XBRL, IFRS)", "url": None,
+                          "last_success_at": latest.isoformat() if latest else None}
+        for r in data["rows"]:
+            for c in r["values"]:
+                f = filings.get(c["accession"]) if c else None
+                if f:
+                    c["form"] = f"ESEF annual report FY {f.period_end.isoformat()}"
+                    if f.viewer_url:
+                        c["url"] = f.viewer_url
     return data
 
 
@@ -225,6 +254,13 @@ def filings(
     _: User = Depends(get_current_user),
 ):
     s = get_security(db, ticker)
+    if not s.cik and s.lei:
+        return [
+            FilingOut(accession=f"ESEF-{f.id}", form="ESEF", filing_date=f.imported_at.date(), report_date=f.period_end,
+                      description=f"Annual financial report ({'filings.xbrl.org' if f.source != 'upload' else 'uploaded'})",
+                      url=f.viewer_url or "")
+            for f in db.scalars(select(EsefFiling).where(EsefFiling.lei == s.lei).order_by(EsefFiling.period_end.desc()))
+        ]
     if not s.cik:
         return []
     stmt = select(Filing).where(Filing.cik == s.cik)

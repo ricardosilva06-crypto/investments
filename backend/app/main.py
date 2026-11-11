@@ -14,7 +14,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from .config import get_settings
 from .db import init_db
 from .services import scheduler
-from .routers import account, admin, ai, auth, companies, engage, research, notes, portfolios, securities, watchlists
+from .routers import account, admin, ai, auth, companies, engage, esef, research, notes, portfolios, securities, watchlists
 
 CSRF_HEADER = "x-requested-with"
 CSRF_VALUE = "InvestorIntelligence"
@@ -60,7 +60,7 @@ async def security_middleware(request: Request, call_next):
     return response
 
 
-for r in (auth, securities, companies, research, watchlists, notes, portfolios, account, admin, ai, engage):
+for r in (auth, securities, companies, research, watchlists, notes, portfolios, account, admin, ai, engage, esef):
     app.include_router(r.router)
 
 

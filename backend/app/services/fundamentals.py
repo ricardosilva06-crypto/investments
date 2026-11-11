@@ -34,7 +34,7 @@ SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 FILING_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{acc}/{doc}"
 FILING_INDEX_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{acc}/"
 
-ANNUAL_FORMS = ("10-K", "10-K/A", "10-KT", "20-F", "20-F/A", "40-F", "40-F/A")
+ANNUAL_FORMS = ("10-K", "10-K/A", "10-KT", "20-F", "20-F/A", "40-F", "40-F/A", "ESEF")  # ESEF = EU annual reports
 REFRESH_AFTER = timedelta(hours=24)
 MIN_RETRY_AFTER_ERROR = timedelta(minutes=15)
 
@@ -57,7 +57,7 @@ def _c(*names: str) -> tuple[str, ...]:
 INCOME = [
     Item("revenue", "Revenue", _c("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
          "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet",
-         "RevenuesNetOfInterestExpense", "ifrs-full:Revenue")),
+         "RevenuesNetOfInterestExpense", "ifrs-full:Revenue", "ifrs-full:RevenueFromContractsWithCustomers")),
     Item("cost_of_revenue", "Cost of revenue", _c("CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold",
          "CostOfServices", "ifrs-full:CostOfSales"), indent=1),
     Item("gross_profit", "Gross profit", _c("GrossProfit", "ifrs-full:GrossProfit")),
@@ -79,17 +79,19 @@ INCOME = [
          kind="per_share", additive=False),
     Item("eps_diluted", "EPS (diluted)", _c("EarningsPerShareDiluted", "ifrs-full:DilutedEarningsLossPerShare"),
          kind="per_share", additive=False),
-    Item("shares_diluted", "Diluted shares (weighted)", _c("WeightedAverageNumberOfDilutedSharesOutstanding"),
+    Item("shares_diluted", "Diluted shares (weighted)", _c("WeightedAverageNumberOfDilutedSharesOutstanding",
+         "ifrs-full:AdjustedWeightedAverageShares"),
          kind="shares", additive=False),
     Item("dps", "Dividends declared per share", _c("CommonStockDividendsPerShareDeclared",
-         "CommonStockDividendsPerShareCashPaid"), kind="per_share", additive=False),
+         "CommonStockDividendsPerShareCashPaid", "ifrs-full:DividendsRecognisedAsDistributionsToOwnersPerShare"),
+         kind="per_share", additive=False),
 ]
 
 BALANCE = [
     Item("cash", "Cash & equivalents", _c("CashAndCashEquivalentsAtCarryingValue",
          "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents", "ifrs-full:CashAndCashEquivalents")),
     Item("short_term_investments", "Short-term investments", _c("ShortTermInvestments", "MarketableSecuritiesCurrent",
-         "AvailableForSaleSecuritiesDebtSecuritiesCurrent"), indent=1),
+         "AvailableForSaleSecuritiesDebtSecuritiesCurrent", "ifrs-full:CurrentInvestments"), indent=1),
     Item("receivables", "Receivables", _c("AccountsReceivableNetCurrent",
          "ifrs-full:TradeAndOtherCurrentReceivables"), indent=1),
     Item("inventory", "Inventory", _c("InventoryNet", "ifrs-full:Inventories"), indent=1),
@@ -99,8 +101,10 @@ BALANCE = [
          "ifrs-full:TradeAndOtherCurrentPayables"), indent=1),
     Item("current_liabilities", "Current liabilities", _c("LiabilitiesCurrent", "ifrs-full:CurrentLiabilities")),
     Item("short_term_debt", "Short-term debt", _c("LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings",
-         "ifrs-full:CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings"), indent=1),
+         "ifrs-full:CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings", "ifrs-full:ShorttermBorrowings",
+         "ifrs-full:CurrentPortionOfLongtermBorrowings"), indent=1),
     Item("long_term_debt", "Long-term debt", _c("LongTermDebtNoncurrent", "LongTermDebt",
+         "ifrs-full:NoncurrentPortionOfNoncurrentBorrowings", "ifrs-full:LongtermBorrowings",
          "ifrs-full:NoncurrentFinancialLiabilities"), indent=1),
     Item("total_liabilities", "Total liabilities", _c("Liabilities", "ifrs-full:Liabilities")),
     Item("equity", "Shareholders' equity", _c("StockholdersEquity",
@@ -118,10 +122,12 @@ CASHFLOW = [
     Item("d_and_a", "Depreciation & amortisation", _c("DepreciationDepletionAndAmortization",
          "DepreciationAndAmortization", "DepreciationAmortizationAndAccretionNet",
          "ifrs-full:DepreciationAndAmortisationExpense"), indent=1),
-    Item("sbc", "Stock-based compensation", _c("ShareBasedCompensation"), indent=1),
+    Item("sbc", "Stock-based compensation", _c("ShareBasedCompensation",
+         "ifrs-full:AdjustmentsForSharebasedPayments"), indent=1),
     Item("capex", "Capital expenditure", _c("PaymentsToAcquirePropertyPlantAndEquipment",
          "PaymentsToAcquireProductiveAssets",
-         "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities")),
+         "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+         "ifrs-full:PurchaseOfPropertyPlantAndEquipmentIntangibleAssetsOtherThanGoodwillInvestmentPropertyAndOtherNoncurrentAssets")),
     Item("cfi", "Investing cash flow", _c("NetCashProvidedByUsedInInvestingActivities",
          "ifrs-full:CashFlowsFromUsedInInvestingActivities")),
     Item("dividends_paid", "Dividends paid", _c("PaymentsOfDividends", "PaymentsOfDividendsCommonStock",
@@ -560,6 +566,17 @@ def build_metrics(facts: list[FinancialFact], period: str = "annual") -> dict:
         if any(cells):
             rows.append({"key": key, "label": label, "kind": kind, "indent": 0, "values": cells})
     return {"statement": "metrics", "period": period, "currency": inc["currency"], "periods": periods, "rows": rows}
+
+
+def facts_for_security(db: Session, sec) -> list:
+    """Reported facts for a security: SEC XBRL (by CIK) or ESEF annual reports (by LEI)."""
+    if sec.cik:
+        return list(db.scalars(select(FinancialFact).where(FinancialFact.cik == sec.cik)))
+    if getattr(sec, "lei", None):
+        from . import esef
+
+        return esef.facts_for(db, sec.lei)
+    return []
 
 
 def filing_url(cik: int, accession: str, document: str = "") -> str:

@@ -62,6 +62,7 @@ export function Statements({ ticker }: { ticker: string }) {
       {data && data.rows.length === 0 && (
         <p className="mt-4 rounded-2xl border border-dashed border-border p-4 text-center text-[13px] text-muted-foreground">
           No {period} figures available for this statement in the company’s XBRL filings.
+          {period === "quarterly" && " European (ESEF) annual reports contain no quarterly figures."}
         </p>
       )}
 

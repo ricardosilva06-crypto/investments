@@ -4,7 +4,7 @@ import * as React from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import Link from "next/link";
-import { Building2, Loader2, Plus, Scale, Search, SlidersHorizontal } from "lucide-react";
+import { Building2, Globe2, Loader2, Plus, Scale, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorNote, PageHeader, SourceLine } from "@/components/page";
@@ -55,6 +55,13 @@ export default function MarketsPage() {
           <Scale className="size-5 text-primary" />
           <p className="mt-1.5 font-semibold">Compare</p>
           <p className="text-[12px] text-muted-foreground">2–3 companies side by side</p>
+        </Link>
+        <Link href="/esef" className="col-span-2 flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3 active:scale-[0.98]">
+          <Globe2 className="size-5 shrink-0 text-primary" />
+          <span>
+            <span className="block font-semibold">European companies</span>
+            <span className="block text-[12px] text-muted-foreground">IFRS fundamentals from ESEF annual reports</span>
+          </span>
         </Link>
       </div>
 

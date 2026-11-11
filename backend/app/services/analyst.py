@@ -160,7 +160,7 @@ def _statement_block(ctx: Context, sec: Security, facts, statement: str, period:
     names = {"income": "Income statement", "balance": "Balance sheet", "cashflow": "Cash flow", "metrics": "Ratios (calculated by the app)"}
     head = " | ".join(p["label"] for p in periods)
     lines = [
-        f"[{sid}] {sec.ticker} {names[statement]}, {period}. Source: SEC EDGAR XBRL filings. "
+        f"[{sid}] {sec.ticker} {names[statement]}, {period}. Source: {'ESEF annual reports (IFRS)' if sec.lei and not sec.cik else 'SEC EDGAR XBRL filings'}. "
         f"Money in {data['currency']} millions; per-share in {data['currency']}." + (" All values calculated." if statement == "metrics" else ""),
         f"Line | {head}",
     ]
@@ -185,7 +185,8 @@ def _statement_block(ctx: Context, sec: Security, facts, statement: str, period:
 def add_company(ctx: Context, db: Session, sec: Security, task: str) -> None:
     prof = db.get(CompanyProfile, sec.cik) if sec.cik else None
     sid = ctx.next_id("S")
-    desc = [f"[{sid}] Company: {sec.name} — ticker {sec.ticker}, exchange {sec.exchange or 'n/a'}, SEC CIK {sec.cik or 'n/a'}."]
+    ident = f"SEC CIK {sec.cik}" if sec.cik else (f"LEI {sec.lei} (EU issuer, ESEF reports)" if sec.lei else "no SEC CIK")
+    desc = [f"[{sid}] Company: {sec.name} — ticker {sec.ticker}, exchange {sec.exchange or 'n/a'}, {ident}."]
     if prof:
         desc.append(
             f"Industry (SIC): {prof.sic_description or 'n/a'}. Fiscal year end (MMDD): {prof.fiscal_year_end or 'n/a'}. "
@@ -194,9 +195,9 @@ def add_company(ctx: Context, db: Session, sec: Security, task: str) -> None:
     ctx.blocks.append(" ".join(desc))
     ctx.sources.append(Source(sid, "company", f"{sec.ticker} · SEC company profile", url=f"/company?t={sec.ticker}"))
 
-    facts = list(db.scalars(select(FinancialFact).where(FinancialFact.cik == sec.cik))) if sec.cik else []
+    facts = fundamentals.facts_for_security(db, sec)
     if not facts:
-        ctx.blocks.append(f"(No SEC XBRL financial data stored for {sec.ticker}. Do not state its financial figures.)")
+        ctx.blocks.append(f"(No SEC or ESEF financial data stored for {sec.ticker}. Do not state its financial figures.)")
         ctx.warnings.append(f"No financial statements stored for {sec.ticker}. Open its company page first to download them.")
     else:
         n_years = 3 if task == "compare" else 4

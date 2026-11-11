@@ -196,7 +196,11 @@ export type Company = {
   key_figures: KeyFigure[];
   currency: string;
   has_financials: boolean;
+  esef: { lei: string; entity_name: string; reports: number; latest_period_end: string | null; sources: string[] } | null;
 };
+
+export type EsefReport = { id: number; lei: string; entity_name: string; period_end: string; source: string; source_ref: string; viewer_url: string; fact_count: number; imported_at: string };
+export type EsefCompany = { lei: string; entity_name: string; ticker: string | null; exchange: string | null; reports: EsefReport[] };
 
 export type FilingRow = { accession: string; form: string; filing_date: string; report_date: string | null; description: string; url: string };
 

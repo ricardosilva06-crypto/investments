@@ -8,6 +8,7 @@ and costs **€0** in mandatory subscriptions, hosting, APIs or AI fees.
 - **AI:** Ollama with open-source models, running locally. Answers are grounded in the app's data and your PDFs,
   with citations, and every number is checked against the sources.
 - **Data:** official, free sources first: SEC EDGAR (company list, XBRL financial statements, filings),
+  ESEF annual reports for European companies (upload, or fetch from filings.xbrl.org),
   ECB euro reference rates, and end-of-day prices via CSV import or the optional Tiingo free plan.
 - **Charts:** TradingView Lightweight Charts (prices) and Recharts (financials, FX).
 

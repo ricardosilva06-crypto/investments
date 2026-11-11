@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, Database, FileText, BellRing, FolderOpen, LogOut, Newspaper, Scale, Settings, Shield, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, Database, FileText, BellRing, FolderOpen, Globe2, LogOut, Newspaper, Scale, Settings, Shield, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetClose, SheetContent } from "@/components/ui/sheet";
 import { Segmented } from "@/components/ui/segmented";
 import { useAuth, useTheme } from "@/components/providers";
@@ -13,6 +13,7 @@ const MENU = [
   { href: "/alerts", label: "Alerts", icon: BellRing, admin: false },
   { href: "/screener", label: "Stock screener", icon: SlidersHorizontal, admin: false },
   { href: "/compare", label: "Compare companies", icon: Scale, admin: false },
+  { href: "/esef", label: "European companies (ESEF)", icon: Globe2, admin: false },
   { href: "/notes", label: "Notes & theses", icon: FileText, admin: false },
   { href: "/documents", label: "Documents (PDF)", icon: FolderOpen, admin: false },
   { href: "/sources", label: "Data sources", icon: Database, admin: false },
