@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { BellOff, CheckCheck } from "lucide-react";
@@ -19,6 +21,11 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
   const { data, mutate } = useNotifications();
   const unread = data?.filter((n) => !n.read_at).length ?? 0;
 
+  // Always show fresh data when the sheet opens (the badge itself polls every minute).
+  React.useEffect(() => {
+    if (open) mutate();
+  }, [open, mutate]);
+
   async function openItem(n: Notification) {
     if (!n.read_at) await api(`/api/notifications/${n.id}/read`, { method: "POST" }).catch(() => {});
     mutate();
@@ -32,6 +39,9 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent title="Notifications" description={unread ? `${unread} unread` : "You're all caught up"}>
         <div className="px-4 pb-6">
+          <Link href="/alerts" onClick={() => onOpenChange(false)} className="mb-2 block text-[13px] font-medium text-primary">
+            Manage alerts →
+          </Link>
           {unread > 0 && (
             <Button
               variant="ghost"
@@ -48,7 +58,7 @@ export function NotificationsSheet({ open, onOpenChange }: { open: boolean; onOp
           {data && data.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
               <BellOff className="size-6" />
-              No notifications yet. Account and data-sync events appear here; price alerts arrive in Phase 5.
+              No notifications yet. Your alerts, account and data-sync events appear here.
             </div>
           )}
           <ul className="space-y-2">

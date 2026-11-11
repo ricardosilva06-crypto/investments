@@ -124,6 +124,8 @@ class Note(Base):
     security_id: Mapped[int | None] = mapped_column(ForeignKey("securities.id", ondelete="SET NULL"))
     title: Mapped[str] = mapped_column(String(160))
     body: Mapped[str] = mapped_column(Text, default="")
+    # Optional shared research: visible read-only to other members only when the owner opts in.
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
@@ -417,3 +419,86 @@ class Valuation(Base):
     inputs: Mapped[str] = mapped_column(Text)  # JSON
     summary: Mapped[str] = mapped_column(Text)  # JSON
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+# ----------------------------------------------------------------- Phase 5
+class Feed(Base):
+    """An RSS/Atom feed added by an administrator (shared by all members)."""
+
+    __tablename__ = "feeds"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(500), unique=True)
+    title: Mapped[str] = mapped_column(String(160))
+    ticker: Mapped[str | None] = mapped_column(String(20))  # optional: feed belongs to one company (e.g. IR press releases)
+    etag: Mapped[str] = mapped_column(String(255), default="")
+    last_modified: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), default="never")
+    message: Mapped[str] = mapped_column(Text, default="")
+    last_fetch_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class NewsItem(Base):
+    __tablename__ = "news_items"
+    __table_args__ = (UniqueConstraint("feed_id", "guid"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    feed_id: Mapped[int] = mapped_column(ForeignKey("feeds.id", ondelete="CASCADE"), index=True)
+    guid: Mapped[str] = mapped_column(String(500))
+    title: Mapped[str] = mapped_column(String(500))
+    link: Mapped[str] = mapped_column(String(1000))
+    summary: Mapped[str] = mapped_column(Text, default="")  # short plain-text excerpt only
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Alert(Base):
+    """A user's private alert.
+
+    kinds: price_above | price_below | daily_move (abs % change between the last two stored closes)
+           | filing (new SEC filing; ``forms`` optional comma list)
+    """
+
+    __tablename__ = "alerts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    ticker: Mapped[str] = mapped_column(String(20), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    threshold: Mapped[Decimal | None] = mapped_column(DecimalString)
+    forms: Mapped[str] = mapped_column(String(80), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    repeat: Mapped[bool] = mapped_column(Boolean, default=False)  # re-arm after triggering
+    note: Mapped[str] = mapped_column(String(200), default="")
+    last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_seen_marker: Mapped[str] = mapped_column(String(64), default="")  # last price date / accession evaluated
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PushSubscription(Base):
+    """A browser Web Push subscription (one per device), owned by a user."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    user_agent: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class JobRun(Base):
+    """History of scheduled background jobs (visible to administrators)."""
+
+    __tablename__ = "job_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job: Mapped[str] = mapped_column(String(48), index=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running | ok | error
+    message: Mapped[str] = mapped_column(Text, default="")

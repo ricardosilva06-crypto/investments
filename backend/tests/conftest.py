@@ -15,6 +15,7 @@ def app_env(tmp_path, monkeypatch):
     monkeypatch.setenv("II_FRONTEND_DIST", str(tmp_path / "no-frontend"))
     monkeypatch.setenv("II_SEC_USER_AGENT", "InvestorIntelligence tests test@example.invalid")
     monkeypatch.setenv("II_OLLAMA_URL", "http://127.0.0.1:9")  # nothing listens here
+    monkeypatch.setenv("II_SCHEDULER", "false")
     config.get_settings.cache_clear()
     db.reset_engine()
     db.init_db()

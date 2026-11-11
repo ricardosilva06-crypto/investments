@@ -42,6 +42,9 @@ export type Note = {
   created_at: string;
   updated_at: string;
   security: Security | null;
+  is_shared: boolean;
+  is_mine: boolean;
+  author: string | null;
 };
 
 export type Notification = {
@@ -337,4 +340,20 @@ export type Analytics = {
     note: string;
   };
   history_note: string;
+};
+
+export type NewsEntry = { type: "news" | "filing"; title: string; link: string; summary: string; source: string; ticker: string | null; date: string; date_is_published: boolean };
+export type FeedItem = { id: number; url: string; title: string; ticker: string | null; status: string; message: string; last_fetch_at: string | null };
+export type AlertItem = {
+  id: number;
+  ticker: string;
+  kind: "price_above" | "price_below" | "daily_move" | "filing";
+  threshold: string | null;
+  forms: string;
+  active: boolean;
+  repeat: boolean;
+  note: string;
+  last_checked_at: string | null;
+  last_triggered_at: string | null;
+  created_at: string;
 };

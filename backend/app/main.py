@@ -9,9 +9,12 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
 from .config import get_settings
 from .db import init_db
-from .routers import account, admin, ai, auth, companies, research, notes, portfolios, securities, watchlists
+from .services import scheduler
+from .routers import account, admin, ai, auth, companies, engage, research, notes, portfolios, securities, watchlists
 
 CSRF_HEADER = "x-requested-with"
 CSRF_VALUE = "InvestorIntelligence"
@@ -21,10 +24,22 @@ UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    scheduler.start()
     yield
+    scheduler.stop()
 
 
-app = FastAPI(title="Investor Intelligence", version="0.1.0", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
+_docs = get_settings().api_docs
+app = FastAPI(
+    title="Investor Intelligence",
+    version="0.5.0",
+    lifespan=lifespan,
+    docs_url="/api/docs" if _docs else None,
+    openapi_url="/api/openapi.json" if _docs else None,
+    redoc_url=None,
+)
+if get_settings().allowed_hosts.strip():
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[h.strip() for h in get_settings().allowed_hosts.split(",") if h.strip()])
 
 
 @app.middleware("http")
@@ -45,7 +60,7 @@ async def security_middleware(request: Request, call_next):
     return response
 
 
-for r in (auth, securities, companies, research, watchlists, notes, portfolios, account, admin, ai):
+for r in (auth, securities, companies, research, watchlists, notes, portfolios, account, admin, ai, engage):
     app.include_router(r.router)
 
 

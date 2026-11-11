@@ -71,13 +71,21 @@ ollama pull nomic-embed-text     # optional: semantic search in your PDFs
 The AI Analyst tab detects Ollama automatically (default `http://127.0.0.1:11434`). Without it, the app
 works normally and explains how to enable AI.
 
+### Automatic jobs
+
+The server refreshes news feeds (30 min), ECB rates (6 h), SEC data, optional prices and alerts for every watched or
+held company (daily, 22:00 UTC), and makes a backup (03:00 UTC). The computer must be on at those times; missed jobs
+run at the next start. You can see them and run them manually in **Administration → Scheduled jobs**.
+
 ## 2. Inviting friends
 
 Accounts are **invite-only**. As admin: open the profile menu → **Administration** → **Invites** →
 **Create**, then share the single-use code (valid 7 days). Your friend opens `/register` and enters it.
 You can also run `python -m app.cli create-invite --label "Alex"`.
 
-Each member's watchlists, portfolios, notes, notifications and preferences are private. Every API query
+Each member's watchlists, portfolios, notes, alerts, documents, AI conversations, valuations, notifications and
+preferences are private. A note is visible to other members only if its owner ticks **Share with members**
+(read-only). Every API query
 is filtered by the signed-in user, and tests check this isolation (`backend/tests/test_data.py`).
 
 **Be aware:** whoever runs the server can read the SQLite file, and admin backups contain everyone's data.
@@ -119,14 +127,31 @@ If you ever expose the app publicly (port forwarding, tunnels), then:
 
 A private network (Tailscale or WireGuard) avoids all of this, which is why it's the default recommendation.
 
+### Hardening checklist (also checked in Administration → Security & remote access)
+
+1. HTTPS via `tailscale serve --bg 8000` (or Caddy), then `II_COOKIE_SECURE=true`.
+2. `II_ALLOWED_HOSTS=<your-machine>.<tailnet>.ts.net,localhost` (rejects requests for other host names).
+3. Keep `II_API_DOCS=false` (the default).
+4. One or two admin accounts at most. Members get invites with the member role.
+5. Run the server as a normal user, keep OS, Python and Node updated, and keep `backend/data/` readable only by that user.
+6. Keep backups somewhere else, encrypted.
+
+### Notifications on your phone
+
+Open **Alerts → Push notifications → Turn on** on each device (needs HTTPS; on iPhone, first add the app to the
+home screen). Alerts always also appear in the bell menu.
+
 ## 4. Backups
 
-- **Administration → Backups → Create backup now** makes a consistent SQLite snapshot (safe while running)
-  in `backend/data/backups/` and lets you download it. The 14 most recent are kept.
+- A **nightly backup** runs automatically (03:00 UTC). **Administration → Backups → Create backup now** makes one
+  on demand. Each backup is a zip in `backend/data/backups/` with a consistent database snapshot **and all uploaded
+  PDFs**. The 14 most recent are kept (`II_BACKUPS_KEEP`).
 - CLI and cron: `cd backend && .venv/bin/python -m app.cli backup`
 - Each user can download their own data as JSON in **Settings → Export my data**.
-- Uploaded PDFs live in `backend/data/documents/`. Include that folder in your backups.
-- To restore, stop the server and copy a backup over `backend/data/investor.db`.
+- Uploaded PDFs live in `backend/data/documents/` and are included in the backup zip.
+- **Restore:** stop the server, unzip the backup, copy `investor.db` to `backend/data/investor.db` and the
+  `documents/` folder to `backend/data/documents/`, then start the server.
+- Backups contain everyone's data and are not encrypted by the app: keep them on an encrypted disk.
 
 ## 5. Project layout
 
@@ -135,10 +160,12 @@ backend/
   app/main.py            FastAPI app, CSRF + security headers, serves the static PWA
   app/models.py          SQLite schema (SQLAlchemy 2)
   app/routers/           auth, securities/search, companies (profile/financials/filings/prices/fx), research (screener/compare/DCF),
+                         engage (news, alerts, push, jobs, security check),
                          watchlists, notes, portfolios (+ analytics, CSV import), account, admin, ai
   app/services/          sec + sec_client (EDGAR), fundamentals (XBRL statements), prices (CSV/Tiingo), ecb (FX),
                          llm (model abstraction, Ollama), documents (PDF + RAG), analyst (grounding + number check),
-                         screener (SEC frames), valuation (DCF), portfolio ledger + analytics, backup
+                         screener (SEC frames), valuation (DCF), portfolio ledger + analytics, news (RSS/Atom),
+                         alerts, push (Web Push), scheduler, backup (zip with DB + PDFs)
   app/cli.py             create-admin, create-invite, sync-sec, backup
   tests/                 pytest suite (auth, isolation, ledger, sync, backups)
 frontend/

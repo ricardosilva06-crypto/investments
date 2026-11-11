@@ -13,6 +13,7 @@ from ..db import get_db
 from ..deps import get_current_user, require_admin
 from ..models import CompanyProfile, FinancialFact, Filing, Security, User
 from ..schemas import QuoteOut, SecurityOut
+from ..services import alerts as alertsvc
 from ..services import ecb, fundamentals, prices
 
 router = APIRouter(prefix="/api", tags=["companies"])
@@ -150,6 +151,7 @@ def company(ticker: str, db: Session = Depends(get_db), _: User = Depends(get_cu
     price_error = prices.maybe_refresh(db, s.ticker)
     if price_error:
         errors["prices"] = price_error
+    alertsvc.evaluate(db, [s.ticker])
     facts = _facts(db, s.cik)
     figures, ccy = _key_figures(facts)
     q = prices.latest_quotes(db, [s.ticker]).get(s.ticker)
@@ -306,6 +308,7 @@ def import_prices(ticker: str, data: PriceImportIn, db: Session = Depends(get_db
         raise HTTPException(422, str(exc))
     n = prices.upsert_bars(db, t, bars, source=f"CSV import: {data.source.strip()}", currency=data.currency)
     db.commit()
+    alertsvc.evaluate(db, [t])
     return {"ticker": t, "imported": n, "first": bars[0]["day"] if bars else None, "last": max(b["day"] for b in bars)}
 
 

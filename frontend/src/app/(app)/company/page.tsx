@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { AlertTriangle, ChevronDown, ExternalLink, Eye, Loader2, NotebookPen, RefreshCw, Scale, Sparkles, Calculator, Columns3 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ExternalLink, Eye, Loader2, NotebookPen, RefreshCw, Scale, Sparkles, Calculator, Columns3, BellPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Segmented } from "@/components/ui/segmented";
@@ -259,6 +259,11 @@ export default function CompanyPage() {
             </Link>
           </Button>
         )}
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
+          <Link href={`/alerts?t=${encodeURIComponent(s.ticker)}`}>
+            <BellPlus /> Alert
+          </Link>
+        </Button>
         <Button variant="outline" size="sm" className="shrink-0" asChild>
           <Link href={`/compare?t=${encodeURIComponent(s.ticker)}`}>
             <Columns3 /> Compare

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorNote, PageHeader } from "@/components/page";
 import { useAuth } from "@/components/providers";
 import { PriceImportCard } from "@/components/price-import";
+import { JobsCard, SecurityCard } from "@/components/admin-ops";
 import { api } from "@/lib/api";
 import { fmtDate, fmtInt, fmtRelative } from "@/lib/format";
 import type { SystemStatus, User } from "@/lib/types";
@@ -89,6 +90,8 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
+      <SecurityCard />
+      <JobsCard />
       <PriceImportCard />
 
       <Card>
@@ -213,7 +216,7 @@ export default function AdminPage() {
             {backups?.length === 0 && <li className="py-2 text-[13px] text-muted-foreground">No backups yet.</li>}
           </ul>
           <p className="text-[11.5px] text-muted-foreground">
-            Backups contain every member’s data. Store them encrypted. The 14 most recent are kept in backend/data/backups. Last check {fmtRelative(status?.server_time)}.
+            Each backup is a zip with the database and all uploaded PDFs, made automatically every night. It contains every member’s data: store copies encrypted. The 14 most recent are kept in backend/data/backups. Last check {fmtRelative(status?.server_time)}.
           </p>
         </CardContent>
       </Card>

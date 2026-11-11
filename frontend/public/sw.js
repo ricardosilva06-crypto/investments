@@ -8,11 +8,11 @@
  *   Never caches /api/auth/* mutations, exports or backups.
  * - Per-user API caches are deleted by the page on sign-in and sign-out.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const SHELL = `ii-shell-${VERSION}`;
 const STATIC = `ii-static-${VERSION}`;
 const API = `ii-api-${VERSION}`;
-const PRECACHE = ["/", "/login", "/markets", "/watchlist", "/analyst", "/portfolio", "/notes", "/company", "/settings", "/sources", "/documents", "/screener", "/compare", "/valuation", "/manifest.webmanifest", "/icons/icon-192.png"];
+const PRECACHE = ["/", "/login", "/markets", "/watchlist", "/analyst", "/portfolio", "/notes", "/company", "/settings", "/sources", "/documents", "/screener", "/compare", "/valuation", "/news", "/alerts", "/manifest.webmanifest", "/icons/icon-192.png"];
 const API_NO_CACHE = [/^\/api\/documents\/\d+\/file/, /^\/api\/ai\/status/, /^\/api\/me\/export/, /^\/api\/admin\/backups/, /^\/api\/auth\/sessions/, /^\/api\/system\/status/];
 
 self.addEventListener("install", (event) => {
@@ -105,6 +105,38 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/splash/")) {
     event.respondWith(staticCacheFirst(request));
   }
+});
+
+// Web Push (optional): show the notification and open the linked page on tap.
+self.addEventListener("push", (event) => {
+  let data = { title: "Investor Intelligence", body: "", url: "/" };
+  try {
+    data = { ...data, ...event.data.json() };
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if ("focus" in w) {
+          w.navigate(url);
+          return w.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
 });
 
 self.addEventListener("message", (event) => {

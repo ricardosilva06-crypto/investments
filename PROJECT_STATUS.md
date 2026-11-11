@@ -1,6 +1,6 @@
 # PROJECT STATUS: Investor Intelligence
 
-_Last updated: 2026-11-11 (Phase 4)_
+_Last updated: 2026-11-11 (Phase 5: all planned phases delivered)_
 
 ## Summary
 
@@ -10,7 +10,85 @@ _Last updated: 2026-11-11 (Phase 4)_
 | **2** | Company profiles, financial statements, historical data, market watchlists, charts | ✅ **Done**: tested with fixtures; live sources still to confirm on your machine |
 | **3** | AI analyst (Ollama), PDF upload & analysis, research reports, bull/bear | ✅ **Done**: tested with a mocked Ollama; run with a real model on your machine |
 | **4** | Screener, DCF, comparison, portfolio management, dividends | ✅ **Done**: tested with fixtures; SEC frames to confirm on your machine |
-| 5 | News, alerts, multi-user, backups, remote access | ⏳ Next. Partly started (invite-only multi-user, backups, export, remote-access guide) |
+| **5** | News, alerts, multi-user, backups, remote access | ✅ **Done**: tested with fixtures; feeds and push to confirm on your setup |
+
+## Phase 5: what was delivered
+
+**News** (`/news`, menu, and a "Latest for your companies" card on Home)
+- Free **RSS/Atom feeds** added by the administrator. Suggested official feeds (SEC, ECB and Federal Reserve
+  press releases) can be added with one tap. A feed can be linked to a ticker, e.g. a company IR feed.
+- **My companies**: linked feeds plus **new SEC filings** (10-K, 10-Q, 8-K, 20-F, 6-K, proxy, S-1) of everything you
+  watch or hold, from the stored filing index (no extra requests).
+- Headlines, date, source and a ≤ 400-character plain-text excerpt only; articles open on the publisher's site.
+- Polite fetching: at most every 30 minutes per feed, conditional requests (ETag/Last-Modified), 3 MB cap.
+  Feeds are parsed with **defusedxml** (blocks XML entity attacks), and non-http(s) links (e.g. `javascript:`) are dropped.
+
+**Alerts** (`/alerts`, plus an "Alert" button on company pages), private per user:
+- Close at/above or at/below a level, a daily move ≥ X%, or a **new SEC filing** (optional form filter).
+- Evaluated only on **stored** data: after the daily refresh, price imports or company refreshes. Never intraday.
+  Each new close or filing is evaluated once. Filing alerts fire only for filings *newer* than the alert.
+  Alerts are one-shot or repeating, and can be paused or deleted.
+- Delivered as in-app notifications (bell). **Optional Web Push** to phones per device (turn on/off, send a test):
+  - free open standard; VAPID keys are generated locally;
+  - payloads are end-to-end encrypted, and the browser maker's push service only relays them;
+  - needs HTTPS, and on iPhone the installed app (iOS 16.4+).
+
+**Private multi-user access**: invite-only accounts and per-user data were already in place. New:
+- **Optional shared research**: tick "Share with members" on a note. Others see it read-only under
+  "Shared by members", with your name, and cannot edit or delete it. Untick to make it private again.
+  Everything else stays private (alerts, documents, conversations, portfolios, valuations), and tests check this.
+
+**Background scheduler** (inside the server process; no cron or paid service needed):
+- feeds every 30 min; ECB rates every 6 h;
+- daily refresh (default 22:00 UTC): SEC data and optional prices for every watched, held or alerted company,
+  then alert evaluation;
+- nightly backup (03:00 UTC).
+
+Every run is recorded and shown in **Administration → Scheduled jobs**, with a "run now" button. Only one process runs
+the scheduler (file lock, which works on Linux, macOS and Windows).
+
+**Backups**
+- Each backup is now a **zip with the database and all uploaded PDFs**, plus a manifest with restore steps.
+  It's made automatically every night, and 14 are kept (configurable). The admin can download them.
+
+**Remote access & hardening**
+- **Administration → Security & remote access** checks:
+  - HTTPS;
+  - secure cookies;
+  - private address;
+  - API docs disabled (now **off by default**, `II_API_DOCS`);
+  - allowed host names (`II_ALLOWED_HOSTS` → host-header protection);
+  - number of admins;
+  - scheduler on.
+- README: step-by-step free Tailscale setup, a hardening checklist and restore instructions.
+
+**Schema upgrades:** new tables are created automatically, and the one new column (`notes.is_shared`) is added in place
+at start-up by a small additive migration helper. Existing databases from earlier phases keep working (tested).
+
+**Verification performed**
+- `pytest`: **59 tests pass**, including 11 new Phase 5 tests:
+  - feeds: RSS and Atom, conditional fetch, javascript: links dropped, rejection of non-feed and file:// URLs,
+    XML-entity attack blocked, "My companies" news including SEC filings;
+  - price, daily-move and filing alerts, including no double-firing and only new filings;
+  - alert privacy;
+  - shared research permissions (read-only, unshare, no accidental unshare on edit);
+  - backup zip contains the database and PDFs;
+  - scheduler timing logic and the daily-refresh job;
+  - security check, docs disabled, persisted VAPID key, push subscription validation;
+  - additive migration.
+- End-to-end on a headless iPhone 14 Pro: Home news card, News (my companies), feed manager, creating alerts
+  (one fired immediately and appeared in the bell), shared note, admin security and jobs. With the real server running,
+  the scheduler **ran the backup, FX and feed jobs by itself**.
+  Bugs found and fixed: the notification list could be stale until its next poll; an alert label was wrongly lowercased.
+
+### Phase 5: honest limitations
+- **Live feeds and real push delivery were not exercised** from the build sandbox (no outbound network; no real phone).
+  Push is implemented to the standard (pywebpush + VAPID) and the subscribe flow is tested, but please use "Send test" on
+  your phone once HTTPS is set up.
+- Many companies don't publish RSS. "My companies" news then relies on SEC filings only.
+- Alerts depend on how fresh your stored prices are: without the optional price provider or regular CSV imports,
+  price alerts can't fire.
+- Backups are not encrypted by the app. Store them on an encrypted disk or encrypt them yourself (e.g. `age`, `7z -p`).
 
 ## Phase 4: what was delivered
 
@@ -312,6 +390,8 @@ Optional integrations must say so and must degrade gracefully when absent. No pa
 | PyMuPDF | PDF text extraction | Yes | No | No | No | **AGPL-3.0** (free; fine for private self-hosting of this unmodified-for-distribution app. A commercial licence is only needed for closed-source distribution). Alternative: `pypdf` (BSD) |
 | numpy | Vector similarity for document search | Yes | No | No | No | BSD |
 | python-multipart | File uploads | Yes | No | No | No | Apache-2.0 |
+| defusedxml | Safe RSS/Atom parsing | Yes | No | No | No | PSF |
+| pywebpush (+ py-vapid, cryptography) | Optional Web Push | Yes | No | No | No | MPL-2.0 / Apache-2.0 or BSD |
 | react-markdown + remark-gfm | Rendering AI answers (raw HTML disabled) | Yes | No | No | No | MIT |
 
 ### B. Infrastructure
@@ -321,7 +401,9 @@ Optional integrations must say so and must degrade gracefully when absent. No pa
 | Hosting | Your own computer / home server | Yes | No | Your hardware | No | n/a |
 | Database | SQLite file | Yes | No | No | No | is open source |
 | Authentication | Built in (Argon2id + sessions) | Yes | No | No | No | is open source |
-| E-mail | **Not used** (invite codes are shared manually) | n/a | n/a | n/a | n/a | n/a |
+| E-mail | **Not used** (invite codes are shared manually; alerts are in-app/push) | n/a | n/a | n/a | n/a | n/a |
+| Scheduler | Built into the server process | Yes | No | No | No | is open source (no cron / cloud scheduler needed) |
+| Web Push relay | Browser vendor push services (Google FCM, Apple, Mozilla) | Yes | No | Fair-use | No | Optional; payloads are end-to-end encrypted. Turn push off to use in-app notifications only |
 | Remote access | Tailscale Personal (optional) | Yes (non-commercial) | No | User and device caps; check current plan | No | **Headscale** or plain **WireGuard** (fully open source) |
 | HTTPS | `tailscale serve` (Let's Encrypt) or Caddy | Yes | No | Let's Encrypt rate limits (generous) | No | Caddy (Apache-2.0) |
 
@@ -339,7 +421,7 @@ next to every figure. Never present delayed data as real-time. Never invent miss
 | **Tiingo** (EOD prices) | ✅ Optional, off by default | Free plan (account, no card) | No | Free plan limited per hour/day (verify current figures). We cap at 40/h and 400/day and refresh a ticker at most every 12 h | US equities/ETFs EOD | Long | Free plan licensed for internal/personal use; check before sharing with others |
 | **FRED** (St. Louis Fed) | Phase 2 (optional) | Yes, free API key | No | Per-key request limits apply (verify current figure in FRED docs before enabling) | US macro | Decades | Some series are third-party copyrighted. Attribution is required, and the terms must be checked per series |
 | Company IR sites / annual reports | Phase 3 (manual PDF upload) | Yes | No | n/a | Any company | Whatever is published | Users upload documents they are entitled to read |
-| Free RSS news feeds | Phase 5 (planned) | Usually | No | Respect each feed's terms and caching | Varies | Short | Headlines and links only, with attribution |
+| Free RSS/Atom news feeds | ✅ **In use** (admin-chosen) | Usually | No | Polled ≤ every 30 min with conditional requests | Varies | We keep 180 days of headlines | Headlines, ≤ 400-char excerpt and link only, with source shown; add only feeds whose terms allow personal use |
 | **Stooq** | Phase 2 (optional, under review) | Free | No | Now requires a (free) key obtained via CAPTCHA, with a low daily hit quota ("Exceeded the daily hits limit") | Global EOD prices | Long | Terms unclear for programmatic use. **Will not be enabled until terms are confirmed.** End-of-day only, never real-time |
 | Alpha Vantage | Optional only | Free tier | No | Reported 25 requests/day (free tier). Far too low for watchlists | US / global | Long | Non-commercial free tier; attribution per terms |
 | Finnhub | Optional only | Free tier | No | Reported ~60 calls/minute; some endpoints premium-only | US-centric | Limited on free | Free tier excludes many endpoints |
@@ -374,10 +456,13 @@ If Ollama is not running, the app shows a clear "AI is unavailable" message and 
 
 ---
 
-## Next steps (Phase 5)
-1. News: free RSS feeds (company press releases, SEC 8-K feed for watched companies), headlines + links only.
-2. Alerts: price-level alerts on stored closes, new SEC filings for watched companies, in-app notifications
-   (optional Web Push over HTTPS).
-3. Optional shared research between members (explicit opt-in per note).
-4. Scheduled jobs: daily SEC/ECB/price refresh and automatic backups (including PDFs).
-5. Remote access hardening checklist and a one-command Tailscale setup guide.
+## All phases delivered: suggested next steps
+1. Run everything once with real data on your machine: `sync-sec`, open AAPL/MSFT and compare with their 10-K,
+   download the screener data, add 1–2 feeds, and install Ollama with a model.
+2. Set up HTTPS with Tailscale, install the PWA on your phone, turn on push and send a test.
+3. Possible improvements:
+   - time-weighted portfolio returns;
+   - ESEF (EU) annual-report parsing for European fundamentals;
+   - OCR via local Tesseract for scanned PDFs;
+   - encrypted backups;
+   - a per-user choice of base currency for all totals.

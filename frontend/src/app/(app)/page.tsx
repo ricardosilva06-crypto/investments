@@ -11,7 +11,7 @@ import { QuoteCell, SecurityRow } from "@/components/security-row";
 import { useAuth } from "@/components/providers";
 import { useShell } from "@/components/shell/app-shell";
 import { fmtInt, fmtMoney, fmtRelative } from "@/lib/format";
-import type { Dashboard, SystemStatus } from "@/lib/types";
+import type { Dashboard, NewsEntry, SystemStatus } from "@/lib/types";
 
 function greeting() {
   const h = new Date().getHours();
@@ -32,6 +32,7 @@ export default function HomePage() {
   const { openSearch } = useShell();
   const { data, error } = useSWR<Dashboard>("/api/dashboard");
   const { data: status } = useSWR<SystemStatus>("/api/system/status", { refreshInterval: 120_000 });
+  const { data: news } = useSWR<{ items: NewsEntry[] }>("/api/news?scope=mine&limit=4");
   const sec = data?.data_sources.find((s) => s.source === "sec_company_tickers_exchange");
 
   return (
@@ -158,6 +159,29 @@ export default function HomePage() {
           <SourceLine>Amounts are cost basis calculated from your own transactions. Open a portfolio for market value.</SourceLine>
         </CardContent>
       </Card>
+
+      {!!news?.items.length && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Latest for your companies</CardTitle>
+            <Link href="/news" className="text-[13px] font-medium text-primary">
+              News
+            </Link>
+          </CardHeader>
+          <ul className="divide-y divide-border/60 pb-1">
+            {news.items.map((n, i) => (
+              <li key={i}>
+                <a href={n.link || undefined} target="_blank" rel="noreferrer noopener" className="block px-4 py-2.5 active:bg-muted">
+                  <span className="block truncate text-[14px] font-medium">{n.title}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {n.source} · {fmtRelative(n.date)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {!!data?.recent_notes.length && (
         <Card className="mt-4">

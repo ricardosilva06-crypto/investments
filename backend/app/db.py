@@ -93,10 +93,26 @@ def reset_engine() -> None:
     _SessionLocal = None
 
 
+# Columns added after a table first shipped. create_all() never alters existing
+# tables, so these are added in place (additive only, never destructive).
+ADDED_COLUMNS = [
+    ("notes", "is_shared", "BOOLEAN NOT NULL DEFAULT 0"),
+]
+
+
+def _ensure_columns(conn) -> None:
+    for table, column, ddl in ADDED_COLUMNS:
+        cols = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+        if cols and column not in cols:
+            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+
 def init_db() -> None:
     from . import models  # noqa: F401  (registers tables)
 
     Base.metadata.create_all(get_engine())
+    with get_engine().begin() as conn:
+        _ensure_columns(conn)
     with get_engine().begin() as conn:
         # Full-text index for document chunks (SQLite FTS5, local).
         conn.exec_driver_sql("CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(body, tokenize='porter unicode61')")

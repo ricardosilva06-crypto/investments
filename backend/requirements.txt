@@ -10,3 +10,6 @@ httpx>=0.28
 python-multipart>=0.0.20  # Apache-2.0, file uploads
 numpy>=2.0                # BSD, vector similarity for local retrieval
 pymupdf>=1.24             # AGPL-3.0 (free for private self-hosting; see PROJECT_STATUS.md)
+# Phase 5 (news, alerts)
+defusedxml>=0.7  # PSF, safe parsing of untrusted RSS/Atom XML
+pywebpush>=2.0   # MPL-2.0, optional Web Push notifications (VAPID, end-to-end encrypted payloads)

@@ -157,7 +157,12 @@ def test_backup(admin_client):
     assert r.status_code == 201
     name = r.json()["name"]
     dl = admin_client.get(f"/api/admin/backups/{name}")
-    assert dl.status_code == 200 and dl.content[:15] == b"SQLite format 3"
+    assert dl.status_code == 200 and dl.content[:2] == b"PK"
+    import io
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(dl.content))
+    assert z.read("investor.db")[:15] == b"SQLite format 3" and "manifest.json" in z.namelist()
     assert admin_client.get("/api/admin/backups/..%2Finvestor.db").status_code == 404
 
 

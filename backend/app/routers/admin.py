@@ -139,4 +139,5 @@ def download_backup(name: str, _: User = Depends(require_admin)):
     match = next((p for p in backup.list_backups() if p.name == name), None)
     if match is None:
         raise HTTPException(404, "Backup not found")
-    return FileResponse(match, media_type="application/vnd.sqlite3", filename=match.name)
+    media = "application/zip" if match.suffix == ".zip" else "application/vnd.sqlite3"
+    return FileResponse(match, media_type=media, filename=match.name)
